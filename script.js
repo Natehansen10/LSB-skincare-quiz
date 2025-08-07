@@ -1,7 +1,5 @@
 const quiz = document.getElementById('quiz');
-const nextBtn = document.getElementById('next-btn');
 
-// Define quiz steps
 const quizData = {
   q1: {
     question: "How long after cleansing in the morning do you begin to feel oily?",
@@ -95,23 +93,42 @@ function showResult(resultKey) {
     <ul>
       ${result.recommendation.map(r => `<li><a href="https://lydsskinbar.com/search?q=${encodeURIComponent(r)}" target="_blank">${r}</a></li>`).join("")}
     </ul>
-    <p>Thanks for taking the LSB Skin Quiz!</p>
+    <p>Want a custom routine and expert advice? Drop your info below:</p>
+
+    <form id="followup-form">
+      <label>Email:</label><br/>
+      <input type="email" id="email" required placeholder="you@example.com"/><br/><br/>
+      
+      <label>Phone (optional):</label><br/>
+      <input type="text" id="phone" placeholder="555-555-5555"/><br/><br/>
+
+      <button type="submit">Get My Custom Routine</button>
+    </form>
+    <p id="confirmation" style="display:none; color: green;">Thank you! We'll be in touch soon.</p>
   `;
 
-  // OPTIONAL: Send to Google Sheets
-  sendToSheets(result.label);
-}
+  const form = document.getElementById('followup-form');
+  form.addEventListener('submit', function (e) {
+    e.preventDefault();
 
-function sendToSheets(skinType) {
-  fetch('https://script.google.com/macros/s/AKfycbxgtBppBvXYm-GpGl0L7FLny51-Xbzg9dXrauoXR-_N/exec', {
-    method: 'POST',
-    body: JSON.stringify({
-      answers: userAnswers,
-      result: skinType,
-    }),
-    headers: {
-      'Content-Type': 'application/json',
-    },
+    const email = document.getElementById('email').value;
+    const phone = document.getElementById('phone').value;
+
+    fetch('https://script.google.com/macros/s/AKfycbxgtBppBvXYm-GpGl0L7FLny51-Xbzg9dXrauoXR-_N/exec', {
+      method: 'POST',
+      body: JSON.stringify({
+        answers: userAnswers,
+        result: result.label,
+        email,
+        phone
+      }),
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    }).then(() => {
+      document.getElementById('followup-form').style.display = 'none';
+      document.getElementById('confirmation').style.display = 'block';
+    });
   });
 }
 

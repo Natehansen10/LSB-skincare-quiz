@@ -45,7 +45,6 @@ const results = {
 let userAnswers = [];
 let currentStep = 'q1';
 
-// Save state so we can restore on refresh/back
 function saveState() {
   localStorage.setItem('quizState', JSON.stringify({
     currentStep,
@@ -76,7 +75,7 @@ function renderQuestion(stepKey) {
     <div class="options" id="options"></div>
     <div class="links-row" style="margin-top:1rem;">
       ${userAnswers.length > 0 ? `<button class="btn btn-outline" id="back-btn">Back</button>` : ''}
-      <button class="btn btn-outline" id="restart-btn">Start Over</button>
+      ${userAnswers.length > 0 ? `<button class="btn btn-outline" id="restart-btn">Start Over</button>` : ''}
     </div>
   `;
 
@@ -98,7 +97,6 @@ function renderQuestion(stepKey) {
     optionsEl.appendChild(b);
   });
 
-  // Back button
   const backBtn = document.getElementById('back-btn');
   if (backBtn) {
     backBtn.addEventListener('click', () => {
@@ -111,13 +109,15 @@ function renderQuestion(stepKey) {
     });
   }
 
-  // Restart button
-  document.getElementById('restart-btn').addEventListener('click', () => {
-    userAnswers = [];
-    currentStep = 'q1';
-    saveState();
-    renderQuestion('q1');
-  });
+  const restartBtn = document.getElementById('restart-btn');
+  if (restartBtn) {
+    restartBtn.addEventListener('click', () => {
+      userAnswers = [];
+      currentStep = 'q1';
+      saveState();
+      renderQuestion('q1');
+    });
+  }
 }
 
 function linkify(rec) {
@@ -136,26 +136,19 @@ function showResult(resultKey) {
     <h2 class="question">Your Skin Type: ${result.label}</h2>
     <p>We recommend starting here:</p>
     <ul>${recList}</ul>
-
     <div class="links-row" style="margin:.5rem 0 1.25rem">
       <a class="btn btn-outline" href="https://www.lydsskinbar.com/s/shop" target="_blank" rel="noopener">Shop LSB Products</a>
     </div>
-
     <hr style="border:none; border-top:1px solid #eee; margin: 1rem 0 1.25rem;" />
-
     <h3 style="margin:.25rem 0 .5rem;">Want a custom routine from our estheticians?</h3>
     <p style="margin-top:0">Share your info and we’ll reach out.</p>
-
     <form id="followup-form" autocomplete="on" novalidate>
       <label for="name">Name</label>
       <input id="name" name="name" type="text" placeholder="Your name" required />
-
       <label for="email">Email</label>
       <input id="email" name="email" type="email" placeholder="you@example.com" required inputmode="email" />
-
       <label for="phone">Phone (optional)</label>
       <input id="phone" name="phone" type="tel" placeholder="555-555-5555" inputmode="tel" />
-
       <div style="display:flex; gap:.75rem; flex-wrap:wrap; margin-top:.5rem;">
         <button id="submit-btn" type="submit" class="btn btn-primary">Get Custom Routine</button>
       </div>
@@ -168,7 +161,6 @@ function showResult(resultKey) {
 
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
-
     const name  = document.getElementById('name').value.trim();
     const email = document.getElementById('email').value.trim();
     const phone = document.getElementById('phone').value.trim();
@@ -190,7 +182,7 @@ function showResult(resultKey) {
           answers: userAnswers,
           result: result.label,
           name, email, phone,
-          token: WEBHOOK_TOKEN // Security token
+          token: WEBHOOK_TOKEN
         })
       });
 
@@ -217,7 +209,6 @@ function showResult(resultKey) {
   });
 }
 
-// INIT
 loadState();
 if (currentStep.startsWith('result')) {
   showResult(currentStep);

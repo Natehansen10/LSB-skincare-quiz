@@ -5,6 +5,8 @@ const quizEl = document.getElementById('quiz');
 const progressEl = document.getElementById('progress-bar');
 const modal = document.getElementById('notify-modal');
 
+const WEBHOOK_TOKEN = "LSB_SUPER_SECRET_2025"; // Shared secret
+
 // Branching data
 const quizData = {
   q1: {
@@ -41,44 +43,44 @@ const results = {
 };
 
 let userAnswers = [];
+let currentStep = 'q1';
 
-// --- Helpers ---
-function updateProgress(stepKey){
-  if (!progressEl) return;
+// Save state so we can restore on refresh/back
+function saveState() {
+  localStorage.setItem('quizState', JSON.stringify({
+    currentStep,
+    userAnswers
+  }));
+}
+
+function loadState() {
+  const saved = localStorage.getItem('quizState');
+  if (saved) {
+    const parsed = JSON.parse(saved);
+    currentStep = parsed.currentStep || 'q1';
+    userAnswers = parsed.userAnswers || [];
+  }
+}
+
+function updateProgress(stepKey) {
   const pct = stepKey.startsWith('q1') ? 10 : (stepKey.startsWith('q2') ? 55 : 100);
   progressEl.style.width = pct + '%';
 }
 
-// Recompute the current step by replaying answers from q1
-function stepFromAnswers(answers) {
-  let step = 'q1';
-  for (const ans of answers) {
-    const node = quizData[step];
-    if (!node) break;
-    const chosen = node.options.find(o => o.text === ans.answer);
-    if (!chosen) break;
-    step = chosen.next;
-    if (step.startsWith('result')) return step;
-  }
-  return step;
-}
-
-function restartQuiz() {
-  userAnswers = [];
-  renderQuestion('q1');
-}
-
-// --- UI renderers ---
-function renderQuestion(stepKey){
+function renderQuestion(stepKey) {
+  currentStep = stepKey;
   updateProgress(stepKey);
   const data = quizData[stepKey];
   quizEl.innerHTML = `
     <h2 class="question">${data.question}</h2>
     <div class="options" id="options"></div>
+    <div class="links-row" style="margin-top:1rem;">
+      ${userAnswers.length > 0 ? `<button class="btn btn-outline" id="back-btn">Back</button>` : ''}
+      <button class="btn btn-outline" id="restart-btn">Start Over</button>
+    </div>
   `;
-  const optionsEl = document.getElementById('options');
 
-  // Answer buttons
+  const optionsEl = document.getElementById('options');
   data.options.forEach(opt => {
     const b = document.createElement('button');
     b.className = 'option-btn';
@@ -86,6 +88,7 @@ function renderQuestion(stepKey){
     b.textContent = opt.text;
     b.addEventListener('click', () => {
       userAnswers.push({ question: data.question, answer: opt.text });
+      saveState();
       if (opt.next.startsWith('result')) {
         showResult(opt.next);
       } else {
@@ -95,38 +98,26 @@ function renderQuestion(stepKey){
     optionsEl.appendChild(b);
   });
 
-  // Nav row: Back + Start over
-  const nav = document.createElement('div');
-  nav.style.display = "flex";
-  nav.style.gap = ".5rem";
-  nav.style.marginTop = ".75rem";
+  // Back button
+  const backBtn = document.getElementById('back-btn');
+  if (backBtn) {
+    backBtn.addEventListener('click', () => {
+      userAnswers.pop();
+      const prevStep = Object.keys(quizData).find(key =>
+        quizData[key].options.some(opt => opt.next === stepKey)
+      );
+      renderQuestion(prevStep || 'q1');
+      saveState();
+    });
+  }
 
-  const backBtn = document.createElement('button');
-  backBtn.className = "btn btn-outline";
-  backBtn.type = "button";
-  backBtn.textContent = "Back";
-  backBtn.disabled = (userAnswers.length === 0);
-  backBtn.addEventListener('click', () => {
-    if (userAnswers.length > 0) {
-      userAnswers.pop(); // remove last answer
-      const prevStep = stepFromAnswers(userAnswers);
-      if (prevStep.startsWith('result')) {
-        showResult(prevStep);
-      } else {
-        renderQuestion(prevStep);
-      }
-    }
+  // Restart button
+  document.getElementById('restart-btn').addEventListener('click', () => {
+    userAnswers = [];
+    currentStep = 'q1';
+    saveState();
+    renderQuestion('q1');
   });
-
-  const restartBtn = document.createElement('button');
-  restartBtn.className = "btn btn-outline";
-  restartBtn.type = "button";
-  restartBtn.textContent = "Start over";
-  restartBtn.addEventListener('click', restartQuiz);
-
-  nav.appendChild(backBtn);
-  nav.appendChild(restartBtn);
-  quizEl.appendChild(nav);
 }
 
 function linkify(rec) {
@@ -134,7 +125,9 @@ function linkify(rec) {
   return `<li><a href="${url}" target="_blank" rel="noopener">${rec}</a></li>`;
 }
 
-function showResult(resultKey){
+function showResult(resultKey) {
+  currentStep = resultKey;
+  saveState();
   updateProgress('result');
   const result = results[resultKey];
   const recList = result.recommendation.map(linkify).join('');
@@ -165,32 +158,11 @@ function showResult(resultKey){
 
       <div style="display:flex; gap:.75rem; flex-wrap:wrap; margin-top:.5rem;">
         <button id="submit-btn" type="submit" class="btn btn-primary">Get Custom Routine</button>
-        <button id="back-btn-result" type="button" class="btn btn-outline">Back</button>
-        <button id="restart-btn-result" type="button" class="btn btn-outline">Start over</button>
       </div>
     </form>
     <p id="confirmation" style="display:none; color: green; margin-top:.75rem;">Thank you! We'll be in touch soon.</p>
   `;
 
-  // Back from result: pop last answer and re-render previous question
-  const backBtnResult = document.getElementById('back-btn-result');
-  backBtnResult.addEventListener('click', () => {
-    if (userAnswers.length > 0) {
-      userAnswers.pop();
-      const prevStep = stepFromAnswers(userAnswers);
-      if (prevStep.startsWith('result')) {
-        showResult(prevStep);
-      } else {
-        renderQuestion(prevStep);
-      }
-    }
-  });
-
-  // Restart from result
-  const restartBtnResult = document.getElementById('restart-btn-result');
-  restartBtnResult.addEventListener('click', restartQuiz);
-
-  // Submit handler (Sheets)
   const form = document.getElementById('followup-form');
   const submitBtn = document.getElementById('submit-btn');
 
@@ -210,29 +182,28 @@ function showResult(resultKey){
     const originalText = submitBtn.textContent;
     submitBtn.textContent = "Submitting…";
 
-    const payload = {
-      answers: userAnswers,
-      result: result.label,
-      name, email, phone,
-      token: "LSB_SUPER_SECRET_2025" // optional: if you added token check in Apps Script
-    };
-    const fd = new FormData();
-    fd.append('payload', JSON.stringify(payload));
-
     try {
       const res = await fetch('https://script.google.com/macros/s/AKfycbx99ra8wZyF-LNEeXiBOxjyP3ilmFuHiBhQUcWsNL1ueFLfs2Lkrd6feIuXo09Fmco1lQ/exec', {
         method: 'POST',
-        body: fd
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          answers: userAnswers,
+          result: result.label,
+          name, email, phone,
+          token: WEBHOOK_TOKEN // Security token
+        })
       });
 
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
       form.style.display = 'none';
       document.getElementById('confirmation').style.display = 'block';
+
       if (modal) {
         modal.classList.add('show');
         setTimeout(() => modal.classList.remove('show'), 1500);
       }
+
       setTimeout(() => {
         window.location.href = 'https://www.lydsskinbar.com/s/stories';
       }, 1800);
@@ -247,4 +218,9 @@ function showResult(resultKey){
 }
 
 // INIT
-renderQuestion('q1');
+loadState();
+if (currentStep.startsWith('result')) {
+  showResult(currentStep);
+} else {
+  renderQuestion(currentStep);
+}

@@ -42,13 +42,33 @@ const results = {
 
 let userAnswers = [];
 
+// --- Helpers ---
 function updateProgress(stepKey){
-  // naive progress: ~10% -> ~55% -> 100%
   if (!progressEl) return;
   const pct = stepKey.startsWith('q1') ? 10 : (stepKey.startsWith('q2') ? 55 : 100);
   progressEl.style.width = pct + '%';
 }
 
+// Recompute the current step by replaying answers from q1
+function stepFromAnswers(answers) {
+  let step = 'q1';
+  for (const ans of answers) {
+    const node = quizData[step];
+    if (!node) break;
+    const chosen = node.options.find(o => o.text === ans.answer);
+    if (!chosen) break;
+    step = chosen.next;
+    if (step.startsWith('result')) return step;
+  }
+  return step;
+}
+
+function restartQuiz() {
+  userAnswers = [];
+  renderQuestion('q1');
+}
+
+// --- UI renderers ---
 function renderQuestion(stepKey){
   updateProgress(stepKey);
   const data = quizData[stepKey];
@@ -57,6 +77,8 @@ function renderQuestion(stepKey){
     <div class="options" id="options"></div>
   `;
   const optionsEl = document.getElementById('options');
+
+  // Answer buttons
   data.options.forEach(opt => {
     const b = document.createElement('button');
     b.className = 'option-btn';
@@ -72,6 +94,39 @@ function renderQuestion(stepKey){
     });
     optionsEl.appendChild(b);
   });
+
+  // Nav row: Back + Start over
+  const nav = document.createElement('div');
+  nav.style.display = "flex";
+  nav.style.gap = ".5rem";
+  nav.style.marginTop = ".75rem";
+
+  const backBtn = document.createElement('button');
+  backBtn.className = "btn btn-outline";
+  backBtn.type = "button";
+  backBtn.textContent = "Back";
+  backBtn.disabled = (userAnswers.length === 0);
+  backBtn.addEventListener('click', () => {
+    if (userAnswers.length > 0) {
+      userAnswers.pop(); // remove last answer
+      const prevStep = stepFromAnswers(userAnswers);
+      if (prevStep.startsWith('result')) {
+        showResult(prevStep);
+      } else {
+        renderQuestion(prevStep);
+      }
+    }
+  });
+
+  const restartBtn = document.createElement('button');
+  restartBtn.className = "btn btn-outline";
+  restartBtn.type = "button";
+  restartBtn.textContent = "Start over";
+  restartBtn.addEventListener('click', restartQuiz);
+
+  nav.appendChild(backBtn);
+  nav.appendChild(restartBtn);
+  quizEl.appendChild(nav);
 }
 
 function linkify(rec) {
@@ -110,11 +165,32 @@ function showResult(resultKey){
 
       <div style="display:flex; gap:.75rem; flex-wrap:wrap; margin-top:.5rem;">
         <button id="submit-btn" type="submit" class="btn btn-primary">Get Custom Routine</button>
+        <button id="back-btn-result" type="button" class="btn btn-outline">Back</button>
+        <button id="restart-btn-result" type="button" class="btn btn-outline">Start over</button>
       </div>
     </form>
     <p id="confirmation" style="display:none; color: green; margin-top:.75rem;">Thank you! We'll be in touch soon.</p>
   `;
 
+  // Back from result: pop last answer and re-render previous question
+  const backBtnResult = document.getElementById('back-btn-result');
+  backBtnResult.addEventListener('click', () => {
+    if (userAnswers.length > 0) {
+      userAnswers.pop();
+      const prevStep = stepFromAnswers(userAnswers);
+      if (prevStep.startsWith('result')) {
+        showResult(prevStep);
+      } else {
+        renderQuestion(prevStep);
+      }
+    }
+  });
+
+  // Restart from result
+  const restartBtnResult = document.getElementById('restart-btn-result');
+  restartBtnResult.addEventListener('click', restartQuiz);
+
+  // Submit handler (Sheets)
   const form = document.getElementById('followup-form');
   const submitBtn = document.getElementById('submit-btn');
 
@@ -137,7 +213,8 @@ function showResult(resultKey){
     const payload = {
       answers: userAnswers,
       result: result.label,
-      name, email, phone
+      name, email, phone,
+      token: "LSB_SUPER_SECRET_2025" // optional: if you added token check in Apps Script
     };
     const fd = new FormData();
     fd.append('payload', JSON.stringify(payload));

@@ -2,17 +2,44 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>LSB Skincare Quiz</title>
-  <link rel="stylesheet" href="style.css" />
-  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700&family=Open+Sans:wght@300;400;600&display=swap" rel="stylesheet">
 
-  <script defer src="script.js"></script>
+  <!-- Adobe Fonts (Helvetica set via your kit) -->
+  <link rel="stylesheet" href="https://use.typekit.net/uby7sdn.css">
+
+  <!-- Main stylesheet -->
+  <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  <main class="quiz-container">
-    <h1>LSB Skincare Quiz</h1>
-    <div id="quiz"></div>
-  </main>
+  <!-- HERO (parallax background) -->
+  <header class="hero" role="banner">
+    <div class="hero__inner">
+      <span class="badge">LSB • Your skin, our obsession</span>
+      <h1>Find Your Skin Type. Get Your Custom Routine.</h1>
+      <p>Take our quick, dynamic quiz to identify your skin type and get product recommendations curated by Lyds Skin Bar in Provo, Utah.</p>
+    </div>
+  </header>
+
+  <!-- QUIZ SECTION -->
+  <section class="section" aria-label="Skincare quiz">
+    <div class="quiz-wrap" id="quiz-card">
+      <div class="progress" aria-hidden="true"><span id="progress-bar"></span></div>
+      <div id="quiz"></div>
+    </div>
+  </section>
+
+  <div class="parallax-strip" aria-hidden="true"></div>
+
+  <!-- Modal -->
+  <div class="modal" id="notify-modal" role="dialog" aria-modal="true" aria-labelledby="notify-title">
+    <div class="modal__card">
+      <h3 id="notify-title">Your estheticians are reviewing your responses</h3>
+      <p>We’ll deliver your custom routine as soon as possible.</p>
+    </div>
+  </div>
+
+  <!-- Quiz logic -->
+  <script src="script.js" defer></script>
 </body>
 </html>

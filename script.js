@@ -1,18 +1,24 @@
-const quiz = document.getElementById('quiz');
+// =====================
+// QUIZ LOGIC + SHEETS
+// =====================
+const quizEl = document.getElementById('quiz');
+const progressEl = document.getElementById('progress-bar');
+const modal = document.getElementById('notify-modal');
 
+// Branching data
 const quizData = {
   q1: {
     question: "How long after cleansing in the morning do you begin to feel oily?",
     options: [
-      { text: "Never/After 12+ hours", next: "q2a" },
-      { text: "6–9 Hours After", next: "q2b" },
+      { text: "Never / After 12+ hours", next: "q2a" },
+      { text: "6–9 hours after", next: "q2b" },
       { text: "Immediately to 5 hours after", next: "q2b" },
     ],
   },
   q2a: {
     question: "How often does your skin feel tight, dry, or flaky?",
     options: [
-      { text: "Yes, Often", next: "result-dry" },
+      { text: "Yes, often", next: "result-dry" },
       { text: "Sometimes", next: "result-normal" },
       { text: "Never", next: "result-balanced" },
     ],
@@ -20,116 +26,116 @@ const quizData = {
   q2b: {
     question: "Where does your skin feel oily?",
     options: [
-      { text: "All Over", next: "result-oily" },
+      { text: "All over", next: "result-oily" },
       { text: "Only some oily areas", next: "result-combo" },
     ],
   },
 };
 
 const results = {
-  "result-dry": {
-    label: "Dry Skin",
-    recommendation: [
-      "HydraBalance Gel",
-      "Cran-Peptide Cream"
-    ],
-  },
-  "result-oily": {
-    label: "Oily Skin",
-    recommendation: [
-      "Ultra Gentle Cleanser",
-      "Mandelic Serum 8%"
-    ],
-  },
-  "result-combo": {
-    label: "Combination Skin",
-    recommendation: [
-      "Green Tea Cleanser",
-      "HydraBalance Gel"
-    ],
-  },
-  "result-balanced": {
-    label: "Balanced Skin",
-    recommendation: [
-      "Daily SPF",
-      "Enzyme Mask"
-    ],
-  },
-  "result-normal": {
-    label: "Normal Skin",
-    recommendation: [
-      "Antioxidant Peptide Serum",
-      "Glycolic Serum 5%"
-    ],
-  },
+  "result-dry": { label: "Dry Skin", recommendation: ["HydraBalance Gel", "Cran-Peptide Cream"] },
+  "result-oily": { label: "Oily Skin", recommendation: ["Ultra Gentle Cleanser", "Mandelic Serum 8%"] },
+  "result-combo": { label: "Combination Skin", recommendation: ["Green Tea Cleanser", "HydraBalance Gel"] },
+  "result-balanced": { label: "Balanced Skin", recommendation: ["Daily SPF", "Enzyme Mask"] },
+  "result-normal": { label: "Normal Skin", recommendation: ["Antioxidant Peptide Serum", "Glycolic Serum 5%"] },
 };
 
-let currentStep = 'q1';
 let userAnswers = [];
 
-function renderQuestion(step) {
-  const data = quizData[step];
-  quiz.innerHTML = `<h2>${data.question}</h2>`;
+function updateProgress(stepKey){
+  // naive progress: 0, 50, 100
+  const pct = stepKey.startsWith('q1') ? 10 : (stepKey.startsWith('q2') ? 55 : 100);
+  progressEl.style.width = pct + '%';
+}
+
+function renderQuestion(stepKey){
+  updateProgress(stepKey);
+  const data = quizData[stepKey];
+  quizEl.innerHTML = `
+    <h2 class="question">${data.question}</h2>
+    <div class="options" id="options"></div>
+  `;
+  const optionsEl = document.getElementById('options');
   data.options.forEach(opt => {
-    const btn = document.createElement('button');
-    btn.innerText = opt.text;
-    btn.onclick = () => {
+    const b = document.createElement('button');
+    b.className = 'option-btn';
+    b.textContent = opt.text;
+    b.addEventListener('click', () => {
       userAnswers.push({ question: data.question, answer: opt.text });
       if (opt.next.startsWith('result')) {
         showResult(opt.next);
       } else {
         renderQuestion(opt.next);
       }
-    };
-    quiz.appendChild(btn);
+    });
+    optionsEl.appendChild(b);
   });
 }
 
-function showResult(resultKey) {
+function showResult(resultKey){
+  updateProgress('result');
   const result = results[resultKey];
-  quiz.innerHTML = `
-    <h2>Your Skin Type: ${result.label}</h2>
-    <p>We recommend:</p>
-    <ul>
-      ${result.recommendation.map(r => `<li><a href="https://lydsskinbar.com/search?q=${encodeURIComponent(r)}" target="_blank">${r}</a></li>`).join("")}
-    </ul>
-    <p>Want a custom routine and expert advice? Drop your info below:</p>
+  const recList = result.recommendation.map(r => `<li>${r}</li>`).join('');
+
+  quizEl.innerHTML = `
+    <h2 class="question">Your Skin Type: ${result.label}</h2>
+    <p>We recommend starting here:</p>
+    <ul>${recList}</ul>
+
+    <div class="links-row" style="margin:.5rem 0 1.25rem">
+      <a class="btn btn-outline" href="https://www.lydsskinbar.com/s/shop" target="_blank" rel="noopener">Shop LSB Products</a>
+    </div>
+
+    <hr style=\"border:none; border-top:1px solid #eee; margin: 1rem 0 1.25rem;\" />
+
+    <h3 style="margin:.25rem 0 .5rem;">Want a custom routine from our estheticians?</h3>
+    <p style="margin-top:0">Share your info and we’ll reach out.</p>
 
     <form id="followup-form">
-      <label>Email:</label><br/>
-      <input type="email" id="email" required placeholder="you@example.com"/><br/><br/>
-      
-      <label>Phone (optional):</label><br/>
-      <input type="text" id="phone" placeholder="555-555-5555"/><br/><br/>
+      <label for="name">Name</label>
+      <input id="name" type="text" placeholder="Your name" required />
 
-      <button type="submit">Get My Custom Routine</button>
+      <label for="email">Email</label>
+      <input id="email" type="email" placeholder="you@example.com" required />
+
+      <label for="phone">Phone (optional)</label>
+      <input id="phone" type="tel" placeholder="555-555-5555" />
+
+      <div style="display:flex; gap:.75rem; flex-wrap:wrap; margin-top:.5rem;">
+        <button type="submit" class="btn btn-primary">Get Custom Routine</button>
+      </div>
     </form>
-    <p id="confirmation" style="display:none; color: green;">Thank you! We'll be in touch soon.</p>
   `;
 
   const form = document.getElementById('followup-form');
-  form.addEventListener('submit', function (e) {
+  form.addEventListener('submit', async (e) => {
     e.preventDefault();
+    const name = document.getElementById('name').value.trim();
+    const email = document.getElementById('email').value.trim();
+    const phone = document.getElementById('phone').value.trim();
 
-    const email = document.getElementById('email').value;
-    const phone = document.getElementById('phone').value;
+    try {
+      await fetch('https://script.google.com/macros/s/AKfycbxgtBppBvXYm-GpGl0L7FLny51-Xbzg9dXrauoXR-_N/exec', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          answers: userAnswers,
+          result: result.label,
+          name, email, phone
+        })
+      });
+    } catch (err) {
+      console.error('Sheets error', err);
+    }
 
-    fetch('https://script.google.com/macros/s/AKfycbxgtBppBvXYm-GpGl0L7FLny51-Xbzg9dXrauoXR-_N/exec', {
-      method: 'POST',
-      body: JSON.stringify({
-        answers: userAnswers,
-        result: result.label,
-        email,
-        phone
-      }),
-      headers: {
-        'Content-Type': 'application/json',
-      },
-    }).then(() => {
-      document.getElementById('followup-form').style.display = 'none';
-      document.getElementById('confirmation').style.display = 'block';
-    });
+    // show modal then redirect to stories
+    const modal = document.getElementById('notify-modal');
+    modal.style.display = 'flex';
+    setTimeout(() => {
+      window.location.href = 'https://www.lydsskinbar.com/s/stories';
+    }, 2000);
   });
 }
 
-renderQuestion(currentStep);
+// INIT
+renderQuestion('q1');

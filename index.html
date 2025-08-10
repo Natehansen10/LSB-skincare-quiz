@@ -3,18 +3,37 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>LSB Skincare Quiz</title>
+  <title>LSB Skincare Quiz | Lyds Skin Bar</title>
 
-  <!-- Adobe Fonts (Helvetica) -->
+  <!-- SEO -->
+  <meta name="description" content="Take LSB’s dynamic skincare quiz to find your skin type and get a custom routine. Curated by Lyds Skin Bar in Provo, Utah." />
+  <meta name="robots" content="index, follow" />
+
+  <!-- Open Graph -->
+  <meta property="og:title" content="LSB Skincare Quiz" />
+  <meta property="og:description" content="Find your skin type and get a custom skincare routine curated by Lyds Skin Bar in Provo, Utah." />
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://natehansen10.github.io/LSB-skincare-quiz/" />
+  <meta property="og:image" content="https://natehansen10.github.io/LSB-skincare-quiz/images/lsb-logo.png" />
+
+  <!-- Preconnect & Fonts -->
+  <link rel="preconnect" href="https://use.typekit.net" crossorigin>
   <link rel="stylesheet" href="https://use.typekit.net/uby7sdn.css">
 
   <!-- Main stylesheet -->
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  <!-- HERO (parallax background) -->
+  <noscript>
+    <p style="text-align:center; padding:1rem; background:#fdd; color:#900;">
+      This quiz needs JavaScript to run. Please enable it in your browser.
+    </p>
+  </noscript>
+
+  <!-- HERO -->
   <header class="hero" role="banner">
     <div class="hero__inner">
+      <img src="images/lsb-logo.png" alt="Lyds Skin Bar Logo" class="hero-logo" />
       <span class="badge">LSB • Your skin, our obsession</span>
       <h1>Find Your Skin Type. Get Your Custom Routine.</h1>
       <p>Take our quick, dynamic quiz to identify your skin type and get product recommendations curated by Lyds Skin Bar in Provo, Utah.</p>
@@ -24,11 +43,14 @@
   <!-- QUIZ SECTION -->
   <section class="section" aria-label="Skincare quiz">
     <div class="quiz-wrap" id="quiz-card">
-      <div class="progress" aria-hidden="true"><span id="progress-bar"></span></div>
+      <div class="progress" aria-hidden="true">
+        <span id="progress-bar"></span>
+      </div>
       <div id="quiz"></div>
     </div>
   </section>
 
+  <!-- Parallax divider -->
   <div class="parallax-strip" aria-hidden="true"></div>
 
   <!-- Modal -->

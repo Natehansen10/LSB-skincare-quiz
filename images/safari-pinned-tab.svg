@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <!-- Rounded square with an "L" hole using evenodd to punch out -->
+  <path fill="#000" fill-rule="evenodd" d="
+    M16,6 h32 a10,10 0 0 1 10,10 v32 a10,10 0 0 1 -10,10 h-32 a10,10 0 0 1 -10,-10 v-32 a10,10 0 0 1 10,-10 z
+    M24,14 v36 h22 v-8 h-14 v-28 z
+  "></path>
+</svg>

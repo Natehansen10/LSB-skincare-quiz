@@ -121,7 +121,6 @@ function showResult(resultKey){
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
 
-    // basic validation
     const name  = document.getElementById('name').value.trim();
     const email = document.getElementById('email').value.trim();
     const phone = document.getElementById('phone').value.trim();
@@ -131,34 +130,32 @@ function showResult(resultKey){
       return;
     }
 
-    // disable to prevent double submit
     submitBtn.disabled = true;
     const originalText = submitBtn.textContent;
     submitBtn.textContent = "Submitting…";
 
+    const payload = {
+      answers: userAnswers,
+      result: result.label,
+      name, email, phone
+    };
+    const fd = new FormData();
+    fd.append('payload', JSON.stringify(payload));
+
     try {
       const res = await fetch('https://script.google.com/macros/s/AKfycbx99ra8wZyF-LNEeXiBOxjyP3ilmFuHiBhQUcWsNL1ueFLfs2Lkrd6feIuXo09Fmco1lQ/exec', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          answers: userAnswers,
-          result: result.label,
-          name, email, phone
-        })
+        body: fd
       });
 
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
-      // success UI
       form.style.display = 'none';
       document.getElementById('confirmation').style.display = 'block';
-
       if (modal) {
         modal.classList.add('show');
         setTimeout(() => modal.classList.remove('show'), 1500);
       }
-
-      // soft delay then redirect to stories (keeps UX smooth)
       setTimeout(() => {
         window.location.href = 'https://www.lydsskinbar.com/s/stories';
       }, 1800);
@@ -168,7 +165,6 @@ function showResult(resultKey){
       alert("Sorry, we couldn’t submit right now. Please try again in a moment.");
       submitBtn.disabled = false;
       submitBtn.textContent = originalText;
-      return;
     }
   });
 }

@@ -7,9 +7,6 @@ const modal = document.getElementById('notify-modal');
 
 const WEBHOOK_TOKEN = "LSB_SUPER_SECRET_2025"; // must match Apps Script
 
-// Kill any legacy saved state from older versions
-try { localStorage.removeItem('quizState'); } catch {}
-
 // Branching data
 const quizData = {
   q1: {
@@ -186,32 +183,36 @@ function showResult(resultKey){
     const originalText = submitBtn.textContent;
     submitBtn.textContent = "Submitting…";
 
+    // -------- CORS-safe submission via FormData (no preflight) --------
+    const payload = {
+      answers: userAnswers,
+      result: result.label,
+      name, email, phone,
+      token: WEBHOOK_TOKEN
+    };
+    const fd = new FormData();
+    fd.append('payload', JSON.stringify(payload));
+
     try {
       const res = await fetch('https://script.google.com/macros/s/AKfycbx99ra8wZyF-LNEeXiBOxjyP3ilmFuHiBhQUcWsNL1ueFLfs2Lkrd6feIuXo09Fmco1lQ/exec', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          answers: userAnswers,
-          result: result.label,
-          name, email, phone,
-          token: WEBHOOK_TOKEN
-        })
+        body: fd
       });
 
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
       form.style.display = 'none';
-      document.getElementById('confirmation').style.display = 'block';
+      const c = document.getElementById('confirmation');
+      c.innerHTML = `Thank you! We'll be in touch soon. <br><br>
+        <button id="retake" class="btn btn-outline">Retake Quiz</button>`;
+      c.style.display = 'block';
 
-      if (modal) {
-        modal.classList.add('show');
-        setTimeout(() => modal.classList.remove('show'), 1500);
-      }
+      document.getElementById('retake').addEventListener('click', () => {
+        userAnswers = [];
+        renderQuestion('q1');
+      });
 
-      // Optional redirect — remove if you want them to stay and retake immediately
-      setTimeout(() => {
-        window.location.href = 'https://www.lydsskinbar.com/s/stories';
-      }, 1800);
+      if (modal) { modal.classList.add('show'); setTimeout(()=>modal.classList.remove('show'), 1500); }
 
     } catch (err) {
       console.error('Sheets error', err);

@@ -7,47 +7,155 @@ const modal = document.getElementById('notify-modal');
 
 const WEBHOOK_TOKEN = "LSB_SUPER_SECRET_2025"; // must match Apps Script
 
-// Branching data
+// ---------------------
+// Branching data (with sensitivity overlay via Q3)
+// ---------------------
 const quizData = {
+  // Q1 — Oil return time
   q1: {
     question: "How long after cleansing in the morning do you begin to feel oily?",
     options: [
-      { text: "Never / After 12+ hours", next: "q2a" },
-      { text: "6–9 hours after", next: "q2b" },
+      { text: "Never / After 12+ hours", next: "q2a" },   // dryness path
+      { text: "6–9 hours after", next: "q2b" },           // oil distribution path
       { text: "Immediately to 5 hours after", next: "q2b" },
     ],
   },
+
+  // Q2a — Dryness frequency (if Q1 = Never/12+)
   q2a: {
     question: "How often does your skin feel tight, dry, or flaky?",
     options: [
-      { text: "Yes, often", next: "result-dry" },
-      { text: "Sometimes", next: "result-normal" },
-      { text: "Never", next: "result-balanced" },
+      { text: "Often", next: "q3-dry" },                  // provisional Dry
+      { text: "Sometimes", next: "q3-combo" },            // provisional Combo
+      { text: "Never", next: "q3-combo" },                // collapse “normal/balanced” into Combination
     ],
   },
+
+  // Q2b — Oil distribution (if Q1 = fast or 6–9h)
   q2b: {
     question: "Where does your skin feel oily?",
     options: [
-      { text: "All over", next: "result-oily" },
-      { text: "Only some oily areas", next: "result-combo" },
+      { text: "All over", next: "q3-oily" },              // provisional Oily
+      { text: "Only some oily areas", next: "q3-combo" }, // provisional Combo
+    ],
+  },
+
+  // Q3 (Sensitivity) — three variants that point to different result buckets
+  "q3-oily": {
+    question: "Does your skin turn red, flushed, or itch after using some products?",
+    options: [
+      { text: "Yes / Yes, often", next: "result-oily-sensitive" },
+      { text: "Sometimes", next: "result-oily-mild" },
+      { text: "Never / Rarely", next: "result-oily" },
+    ],
+  },
+  "q3-combo": {
+    question: "Does your skin turn red, flushed, or itch after using some products?",
+    options: [
+      { text: "Yes / Yes, often", next: "result-combo-sensitive" },
+      { text: "Sometimes", next: "result-combo-mild" },
+      { text: "Never / Rarely", next: "result-combo" },
+    ],
+  },
+  "q3-dry": {
+    question: "Does your skin turn red, flushed, or itch after using some products?",
+    options: [
+      { text: "Yes / Yes, often", next: "result-dry-sensitive" },
+      { text: "Sometimes", next: "result-dry-mild" },
+      { text: "Never / Rarely", next: "result-dry" },
     ],
   },
 };
 
+// ---------------------
+// Results (LSB-forward; tweak products anytime)
+// ---------------------
 const results = {
-  "result-dry":     { label: "Dry Skin",         recommendation: ["HydraBalance Gel", "Cran-Peptide Cream"] },
-  "result-oily":    { label: "Oily Skin",        recommendation: ["Ultra Gentle Cleanser", "Mandelic Serum 8%"] },
-  "result-combo":   { label: "Combination Skin", recommendation: ["Green Tea Cleanser", "HydraBalance Gel"] },
-  "result-balanced":{ label: "Balanced Skin",    recommendation: ["Daily SPF", "Enzyme Mask"] },
-  "result-normal":  { label: "Normal Skin",      recommendation: ["Antioxidant Peptide Serum", "Glycolic Serum 5%"] },
+  // OILY
+  "result-oily": {
+    label: "Oily Skin",
+    recommendation: ["Ultra Gentle Cleanser", "Mandelic Serum 5%", "Hydrabalance Gel", "Daily SPF 30 Lotion"],
+  },
+  "result-oily-mild": {
+    label: "Oily & Mildly Sensitive",
+    recommendation: ["Ultra Gentle Cleanser", "Hydrabalance Gel", "Mandelic Serum 5% (3–4x/week)", "Daily SPF 30 Lotion"],
+  },
+  "result-oily-sensitive": {
+    label: "Oily & Sensitive",
+    recommendation: ["Ultra Gentle Cleanser", "Hydrabalance Gel", "Cran-Peptide Cream (buffer actives)", "Daily SPF 30 Lotion"],
+  },
+
+  // COMBINATION
+  "result-combo": {
+    label: "Combination Skin",
+    recommendation: ["Ultra Gentle Cleanser", "Mandelic Serum 5% (T-zone)", "Hydrabalance Gel", "Cran-Peptide Cream (dry zones)"],
+  },
+  "result-combo-mild": {
+    label: "Combination & Mildly Sensitive",
+    recommendation: ["Ultra Gentle Cleanser", "Hydrabalance Gel", "Mandelic Serum 5% (T-zone, 2–3x/week)", "Daily SPF 30 Lotion"],
+  },
+  "result-combo-sensitive": {
+    label: "Combination & Sensitive",
+    recommendation: ["Ultra Gentle Cleanser", "Hydrabalance Gel", "Cran-Peptide Cream", "Daily SPF 30 Lotion"],
+  },
+
+  // DRY
+  "result-dry": {
+    label: "Dry Skin",
+    recommendation: ["Ultra Gentle Cleanser", "Moisture Balance Toner", "Hydrabalance Gel", "Cran-Peptide Cream", "Daily SPF 30 Lotion"],
+  },
+  "result-dry-mild": {
+    label: "Dry & Mildly Sensitive",
+    recommendation: ["Ultra Gentle Cleanser", "Hydrabalance Gel", "Cran-Peptide Cream", "Daily SPF 30 Lotion"],
+  },
+  "result-dry-sensitive": {
+    label: "Dry & Sensitive",
+    recommendation: ["Ultra Gentle Cleanser", "Hydrabalance Gel (buffer actives)", "Cran-Peptide Cream", "Daily SPF 30 Lotion"],
+  },
 };
 
 let userAnswers = [];
 let currentStep = 'q1';
 
-// -------- Helpers --------
+// ---------------------
+// UTM helpers
+// ---------------------
+function slugify(str) {
+  return String(str)
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+}
+
+function withUTM(baseUrl, { source="skinquiz", medium="website", campaign="", content="" } = {}) {
+  // Support absolute and relative URLs
+  const url = baseUrl.startsWith("http")
+    ? new URL(baseUrl)
+    : new URL(baseUrl, window.location.origin);
+
+  url.searchParams.set("utm_source", source);
+  url.searchParams.set("utm_medium", medium);
+  if (campaign) url.searchParams.set("utm_campaign", campaign);
+  if (content)  url.searchParams.set("utm_content", content);
+  return url.toString();
+}
+
+// Update linkify to accept campaign + content and append UTMs
+function linkify(rec, campaignSlug){
+  const base = `https://www.lydsskinbar.com/s/shop?search=${encodeURIComponent(rec)}`;
+  const url  = withUTM(base, { campaign: campaignSlug, content: slugify(rec) });
+  return `<li><a href="${url}" target="_blank" rel="noopener">${rec}</a></li>`;
+}
+
+// ---------------------
+// Helpers
+// ---------------------
 function updateProgress(stepKey){
-  const pct = stepKey.startsWith('q1') ? 10 : (stepKey.startsWith('q2') ? 55 : 100);
+  // q1 ~ 15%, q2 ~ 55%, q3 ~ 85%, result ~ 100%
+  let pct = 15;
+  if (stepKey.startsWith('q2')) pct = 55;
+  else if (stepKey.startsWith('q3')) pct = 85;
+  else if (stepKey.startsWith('result')) pct = 100;
   if (progressEl) progressEl.style.width = pct + '%';
 }
 
@@ -72,7 +180,9 @@ function restartQuiz(){
   renderQuestion('q1');
 }
 
-// -------- UI --------
+// ---------------------
+// UI
+// ---------------------
 function renderQuestion(stepKey){
   currentStep = stepKey;
   updateProgress(stepKey);
@@ -118,17 +228,26 @@ function renderQuestion(stepKey){
   if (restartBtn) restartBtn.addEventListener('click', restartQuiz);
 }
 
-function linkify(rec){
-  const url = `https://www.lydsskinbar.com/s/shop?search=${encodeURIComponent(rec)}`;
-  return `<li><a href="${url}" target="_blank" rel="noopener">${rec}</a></li>`;
-}
-
 function showResult(resultKey){
   currentStep = resultKey;
   updateProgress('result');
 
   const result = results[resultKey];
-  const recList = result.recommendation.map(linkify).join('');
+  const campaignSlug = slugify(resultKey.replace(/^result-/, "")); // e.g., "oily_sensitive"
+
+  // Build recommendation list with UTMs
+  const recList = result.recommendation.map(rec => linkify(rec, campaignSlug)).join('');
+
+  // UTM-tagged primary CTAs
+  const shopURL = withUTM("https://www.lydsskinbar.com/s/shop", {
+    campaign: campaignSlug,
+    content: "shop_button"
+  });
+
+  const bookURL = withUTM("/book", {
+    campaign: campaignSlug,
+    content: "book_button"
+  });
 
   quizEl.innerHTML = `
     <h2 class="question">Your Skin Type: ${result.label}</h2>
@@ -136,7 +255,8 @@ function showResult(resultKey){
     <ul>${recList}</ul>
 
     <div class="links-row" style="margin:.5rem 0 1.25rem">
-      <a class="btn btn-outline" href="https://www.lydsskinbar.com/s/shop" target="_blank" rel="noopener">Shop LSB Products</a>
+      <a class="btn btn-outline" href="${shopURL}" target="_blank" rel="noopener">Shop LSB Products</a>
+      <a class="btn btn-outline" href="${bookURL}" target="_blank" rel="noopener">Book at Lyds Skin Bar (Provo)</a>
       <button id="restart-btn-result" type="button" class="btn btn-outline">Retake Quiz</button>
     </div>
 
@@ -164,6 +284,13 @@ function showResult(resultKey){
 
   document.getElementById('restart-btn-result').addEventListener('click', restartQuiz);
 
+  // Fire a lightweight event for analytics (optional)
+  try {
+    window.dispatchEvent(new CustomEvent("lsbQuizComplete", {
+      detail: { result_key: resultKey, utm_campaign: campaignSlug, answers: userAnswers.slice() }
+    }));
+  } catch (e) {}
+
   const form = document.getElementById('followup-form');
   const submitBtn = document.getElementById('submit-btn');
 
@@ -183,10 +310,12 @@ function showResult(resultKey){
     const originalText = submitBtn.textContent;
     submitBtn.textContent = "Submitting…";
 
-    // -------- CORS-safe submission via FormData (no preflight) --------
+    // Include result + campaign in payload for segmentation
     const payload = {
       answers: userAnswers,
       result: result.label,
+      result_key: resultKey,
+      utm_campaign: campaignSlug,
       name, email, phone,
       token: WEBHOOK_TOKEN
     };
@@ -212,7 +341,10 @@ function showResult(resultKey){
         renderQuestion('q1');
       });
 
-      if (modal) { modal.classList.add('show'); setTimeout(()=>modal.classList.remove('show'), 1500); }
+      if (modal) {
+        modal.classList.add('show');
+        setTimeout(() => modal.classList.remove('show'), 1500);
+      }
 
     } catch (err) {
       console.error('Sheets error', err);
@@ -223,5 +355,7 @@ function showResult(resultKey){
   });
 }
 
-// -------- INIT --------
+// ---------------------
+// INIT
+// ---------------------
 renderQuestion('q1');

@@ -225,4 +225,25 @@ a:focus-visible {
   .hero__inner { max-width: 960px; }
   .quiz-wrap { max-width: 800px; }
 }
+/* Form field spacing and width improvements */
+form input[type="text"],
+form input[type="email"],
+form input[type="tel"] {
+    width: 100%;
+    max-width: 500px; /* Keeps it from stretching too wide on large screens */
+    padding: 10px;
+    margin-bottom: 12px;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    box-sizing: border-box;
+}
+
+/* Center the form inputs within the container */
+form {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start; /* Or 'center' if you want them centered */
+    padding: 0 15px; /* Adds space from the edge of the container */
+}
+
 

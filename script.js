@@ -148,7 +148,7 @@ const productImages = {
   "Hydrabalance Gel": "images/Hydra-Balance-Gel.png",
   "Cran-Peptide Cream": "images/Cran-Peptide-Cream-1.png",
   "Daily SPF 30 Lotion": "images/Daily-SPF30-Plus.png",
-  "Mandelic Serum 5%": "images/Mandelic-Serum-5%25.png" // file is '...5%.png' on disk; use %25 in the URL
+  "Mandelic Serum 5%": "images/Mandelic-Serum-5.png" // file is '...5%.png' on disk; use %25 in the URL
 };
 
 // Normalize recommendation labels to base product keys

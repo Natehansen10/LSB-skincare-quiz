@@ -82,17 +82,17 @@ const results = {
   },
   "result-oily-sensitive": {
     label: "Oily & Sensitive",
-    recommendation: ["Ultra Gentle Cleanser", "Hydrabalance Gel", "Cran-Peptide Cream (buffer actives)", "Daily SPF 30 Lotion"],
+    recommendation: ["Ultra Gentle Cleanser", "Hydrabalance Gel", "Cran-Peptide Cream", "Daily SPF 30 Lotion"],
   },
 
   // COMBINATION
   "result-combo": {
     label: "Combination Skin",
-    recommendation: ["Ultra Gentle Cleanser", "Mandelic Serum 5% (T-zone)", "Hydrabalance Gel", "Cran-Peptide Cream (dry zones)"],
+    recommendation: ["Ultra Gentle Cleanser", "Mandelic Serum 5%", "Hydrabalance Gel", "Cran-Peptide Cream"],
   },
   "result-combo-mild": {
     label: "Combination & Mildly Sensitive",
-    recommendation: ["Ultra Gentle Cleanser", "Hydrabalance Gel", "Mandelic Serum 5% (T-zone, 2–3x/week)", "Daily SPF 30 Lotion"],
+    recommendation: ["Ultra Gentle Cleanser", "Hydrabalance Gel", "Mandelic Serum 5% (2–3x/week)", "Daily SPF 30 Lotion"],
   },
   "result-combo-sensitive": {
     label: "Combination & Sensitive",
@@ -110,7 +110,7 @@ const results = {
   },
   "result-dry-sensitive": {
     label: "Dry & Sensitive",
-    recommendation: ["Ultra Gentle Cleanser", "Hydrabalance Gel (buffer actives)", "Cran-Peptide Cream", "Daily SPF 30 Lotion"],
+    recommendation: ["Ultra Gentle Cleanser", "Hydrabalance Gel", "Cran-Peptide Cream", "Daily SPF 30 Lotion"],
   },
 };
 
@@ -140,11 +140,63 @@ function withUTM(baseUrl, { source="skinquiz", medium="website", campaign="", co
   return url.toString();
 }
 
-// Update linkify to accept campaign + content and append UTMs
+// Map product names (base) -> image paths
+const productImages = {
+  "Ultra Gentle Cleanser": "images/Ultra-Gentle-Cleanser-16oz.png",
+  "Hydrabalance Gel": "images/Hydra Balance Gel.png",
+  "Cran-Peptide Cream": "images/Cran-Peptide-Cream-1.png",
+  "Daily SPF 30 Lotion": "images/Daily_SPF30_Plus.png",
+  "Mandelic Serum 5%": "images/Mandelic Serum 5%.png"
+};
+
+// Normalize recommendation labels to base product keys
+function baseProductName(label){
+  // Remove anything in parentheses and trim
+  return label.split(" (")[0].trim();
+}
+
+// Build the image gallery HTML for the given recommendations
+function productGalleryHTML(recommendations, campaignSlug){
+  const items = recommendations.map((rec) => {
+    const base = baseProductName(rec);
+    const imgPath = productImages[base];
+    if (!imgPath) return ""; // skip if we don't have an image mapping
+
+    // Link to shop with UTMs (content set to product slug)
+    const shopLink = withUTM(
+      `https://www.lydsskinbar.com/s/shop?search=${encodeURIComponent(base)}`,
+      { campaign: campaignSlug, content: slugify(base) }
+    );
+
+    return `
+      <div class="product-item" style="text-align:center; max-width:120px;">
+        <a href="${shopLink}" target="_blank" rel="noopener" style="text-decoration:none;">
+          <img src="${imgPath}" alt="${base}" style="width:100px; height:auto; border-radius:6px; border:1px solid #eee; background:#fff; padding:5px; display:block; margin:0 auto 6px;" />
+          <span style="display:block; font-size:.9rem; line-height:1.1;">${base}</span>
+        </a>
+      </div>
+    `;
+  }).join("");
+
+  if (!items.trim()) return "";
+
+  // Container row
+  return `
+    <div class="product-recommendations"
+         style="display:flex; flex-wrap:wrap; justify-content:center; gap:20px; margin-top:16px;">
+      ${items}
+    </div>
+  `;
+}
+
+// Update linkify to accept campaign + content and append UTMs (for the text list)
 function linkify(rec, campaignSlug){
-  const base = `https://www.lydsskinbar.com/s/shop?search=${encodeURIComponent(rec)}`;
-  const url  = withUTM(base, { campaign: campaignSlug, content: slugify(rec) });
-  return `<li><a href="${url}" target="_blank" rel="noopener">${rec}</a></li>`;
+  const base = baseProductName(rec);
+  const url = withUTM(`https://www.lydsskinbar.com/s/shop?search=${encodeURIComponent(base)}`, {
+    campaign: campaignSlug,
+    content: slugify(base)
+  });
+  return `<li><a href="${url}" target="_blank" rel="noopener">${base}</a></li>`;
 }
 
 // ---------------------
@@ -235,15 +287,16 @@ function showResult(resultKey){
   const result = results[resultKey];
   const campaignSlug = slugify(resultKey.replace(/^result-/, "")); // e.g., "oily_sensitive"
 
-  // Build recommendation list with UTMs
+  // Build recommendation list with UTMs (text list)
   const recList = result.recommendation.map(rec => linkify(rec, campaignSlug)).join('');
+  // Build image gallery row for these recs
+  const gallery = productGalleryHTML(result.recommendation, campaignSlug);
 
   // UTM-tagged primary CTAs
   const shopURL = withUTM("https://www.lydsskinbar.com/s/shop", {
     campaign: campaignSlug,
     content: "shop_button"
   });
-
   const bookURL = withUTM("/book", {
     campaign: campaignSlug,
     content: "book_button"
@@ -253,6 +306,8 @@ function showResult(resultKey){
     <h2 class="question">Your Skin Type: ${result.label}</h2>
     <p>We recommend starting here:</p>
     <ul>${recList}</ul>
+
+    ${gallery}
 
     <!-- Added more space above buttons + removed underline on the two CTAs -->
     <div class="links-row" style="margin:2rem 0 1.25rem;">

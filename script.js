@@ -128,7 +128,6 @@ function slugify(str) {
 }
 
 function withUTM(baseUrl, { source="skinquiz", medium="website", campaign="", content="" } = {}) {
-  // Support absolute and relative URLs
   const url = baseUrl.startsWith("http")
     ? new URL(baseUrl)
     : new URL(baseUrl, window.location.origin);
@@ -140,27 +139,29 @@ function withUTM(baseUrl, { source="skinquiz", medium="website", campaign="", co
   return url.toString();
 }
 
-// Map product names (base) -> image paths
+// ---------------------
+// Product image map (matches your exact filenames)
+// Note: '%25' is the URL-encoded '%', required for web loading.
+// ---------------------
 const productImages = {
   "Ultra Gentle Cleanser": "images/Ultra-Gentle-Cleanser-16oz.png",
-  "Hydrabalance Gel": "images/Hydra Balance Gel.png",
+  "Hydrabalance Gel": "images/Hydra-Balance-Gel.png",
   "Cran-Peptide Cream": "images/Cran-Peptide-Cream-1.png",
-  "Daily SPF 30 Lotion": "images/Daily_SPF30_Plus.png",
-  "Mandelic Serum 5%": "images/Mandelic Serum 5%.png"
+  "Daily SPF 30 Lotion": "images/Daily-SPF30-Plus.png",
+  "Mandelic Serum 5%": "images/Mandelic-Serum-5%25.png" // file is '...5%.png' on disk; use %25 in the URL
 };
 
 // Normalize recommendation labels to base product keys
 function baseProductName(label){
-  // Remove anything in parentheses and trim
   return label.split(" (")[0].trim();
 }
 
-// Build the image gallery HTML for the given recommendations
+// Build the image gallery HTML for the given recommendations (gallery only, no text list)
 function productGalleryHTML(recommendations, campaignSlug){
   const items = recommendations.map((rec) => {
     const base = baseProductName(rec);
     const imgPath = productImages[base];
-    if (!imgPath) return ""; // skip if we don't have an image mapping
+    if (!imgPath) return "";
 
     // Link to shop with UTMs (content set to product slug)
     const shopLink = withUTM(
@@ -179,24 +180,12 @@ function productGalleryHTML(recommendations, campaignSlug){
   }).join("");
 
   if (!items.trim()) return "";
-
-  // Container row
+  // Responsive grid (2 per row mobile, 3 tablet, 5 desktop handled in CSS)
   return `
-    <div class="product-recommendations"
-         style="display:flex; flex-wrap:wrap; justify-content:center; gap:20px; margin-top:16px;">
+    <div class="product-recommendations" style="margin-top:16px;">
       ${items}
     </div>
   `;
-}
-
-// Update linkify to accept campaign + content and append UTMs (for the text list)
-function linkify(rec, campaignSlug){
-  const base = baseProductName(rec);
-  const url = withUTM(`https://www.lydsskinbar.com/s/shop?search=${encodeURIComponent(base)}`, {
-    campaign: campaignSlug,
-    content: slugify(base)
-  });
-  return `<li><a href="${url}" target="_blank" rel="noopener">${base}</a></li>`;
 }
 
 // ---------------------
@@ -287,9 +276,7 @@ function showResult(resultKey){
   const result = results[resultKey];
   const campaignSlug = slugify(resultKey.replace(/^result-/, "")); // e.g., "oily_sensitive"
 
-  // Build recommendation list with UTMs (text list)
-  const recList = result.recommendation.map(rec => linkify(rec, campaignSlug)).join('');
-  // Build image gallery row for these recs
+  // Build image gallery only (no text list)
   const gallery = productGalleryHTML(result.recommendation, campaignSlug);
 
   // UTM-tagged primary CTAs
@@ -305,11 +292,9 @@ function showResult(resultKey){
   quizEl.innerHTML = `
     <h2 class="question">Your Skin Type: ${result.label}</h2>
     <p>We recommend starting here:</p>
-    <ul>${recList}</ul>
 
     ${gallery}
 
-    <!-- Added more space above buttons + removed underline on the two CTAs -->
     <div class="links-row" style="margin:2rem 0 1.25rem;">
       <a class="btn btn-outline" style="text-decoration:none;" href="${shopURL}" target="_blank" rel="noopener">Shop LSB Products</a>
       <a class="btn btn-outline" style="text-decoration:none;" href="${bookURL}" target="_blank" rel="noopener">Book at Lyds Skin Bar</a>
@@ -340,7 +325,7 @@ function showResult(resultKey){
 
   document.getElementById('restart-btn-result').addEventListener('click', restartQuiz);
 
-  // Fire a lightweight event for analytics (optional)
+  // Lightweight analytics hook
   try {
     window.dispatchEvent(new CustomEvent("lsbQuizComplete", {
       detail: { result_key: resultKey, utm_campaign: campaignSlug, answers: userAnswers.slice() }

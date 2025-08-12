@@ -254,9 +254,10 @@ function showResult(resultKey){
     <p>We recommend starting here:</p>
     <ul>${recList}</ul>
 
-    <div class="links-row" style="margin:.5rem 0 1.25rem">
-      <a class="btn btn-outline" href="${shopURL}" target="_blank" rel="noopener">Shop LSB Products</a>
-      <a class="btn btn-outline" href="${bookURL}" target="_blank" rel="noopener">Book at Lyds Skin Bar (Provo)</a>
+    <!-- Added more space above buttons + removed underline on the two CTAs -->
+    <div class="links-row" style="margin:2rem 0 1.25rem;">
+      <a class="btn btn-outline" style="text-decoration:none;" href="${shopURL}" target="_blank" rel="noopener">Shop LSB Products</a>
+      <a class="btn btn-outline" style="text-decoration:none;" href="${bookURL}" target="_blank" rel="noopener">Book at Lyds Skin Bar</a>
       <button id="restart-btn-result" type="button" class="btn btn-outline">Retake Quiz</button>
     </div>
 
@@ -267,13 +268,13 @@ function showResult(resultKey){
 
     <form id="followup-form" autocomplete="on" novalidate>
       <label for="name">Name</label>
-      <input id="name" name="name" type="text" placeholder="Your name" required />
+      <input id="name" name="name" type="text" placeholder="LSB" required />
 
       <label for="email">Email</label>
-      <input id="email" name="email" type="email" placeholder="you@example.com" required inputmode="email" />
+      <input id="email" name="email" type="email" placeholder="Lydsskinbar@gmail.com" required inputmode="email" />
 
       <label for="phone">Phone (optional)</label>
-      <input id="phone" name="phone" type="tel" placeholder="555-555-5555" inputmode="tel" />
+      <input id="phone" name="phone" type="tel" placeholder="(801) 717-9313" inputmode="tel" />
 
       <div style="display:flex; gap:.75rem; flex-wrap:wrap; margin-top:.5rem;">
         <button id="submit-btn" type="submit" class="btn btn-primary">Get Custom Routine</button>

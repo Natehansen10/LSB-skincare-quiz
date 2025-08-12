@@ -246,4 +246,52 @@ form {
     padding: 0 15px; /* Adds space from the edge of the container */
 }
 
+/* Product Recommendations Section */
+.product-recommendations {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr); /* Default: 2 per row */
+    gap: 20px;
+    margin-top: 20px;
+    justify-items: center; /* Center content in each cell */
+}
+
+.product-item {
+    text-align: center;
+    max-width: 120px;
+}
+
+.product-item img {
+    width: 100px;
+    height: auto;
+    border-radius: 6px;
+    border: 1px solid #eee;
+    background: #fff;
+    padding: 5px;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.product-item img:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.08);
+}
+
+.product-item p {
+    font-size: 0.85rem;
+    color: var(--muted);
+    margin-top: 6px;
+}
+
+/* Medium screens (tablets) */
+@media (min-width: 768px) {
+    .product-recommendations {
+        grid-template-columns: repeat(3, 1fr); /* 3 per row on tablets */
+    }
+}
+
+/* Large screens (desktops) */
+@media (min-width: 1024px) {
+    .product-recommendations {
+        grid-template-columns: repeat(5, 1fr); /* 5 per row on desktops */
+    }
+}
 

@@ -1,74 +1,502 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <meta http-equiv="X-UA-Compatible" content="IE=edge" />
-  <meta name="theme-color" content="#ffffff" />
-  <link rel="apple-touch-icon" href="images/apple-touch-icon.png" sizes="180x180" />
-  <link rel="icon" href="images/favicon-32x32.png" sizes="32x32" type="image/png" />
-  <link rel="icon" href="images/favicon-16x16.png" sizes="16x16" type="image/png" />
-  <link rel="mask-icon" href="images/safari-pinned-tab.svg" color="#5bbad5" />
-  <meta name="msapplication-TileColor" content="#da532c" />
-  <title>LSB Skincare Quiz | Lyds Skin Bar</title>
+// =====================
+// QUIZ LOGIC + SHEETS
+// =====================
+const quizEl = document.getElementById('quiz');
+const progressEl = document.getElementById('progress-bar');
+const modal = document.getElementById('notify-modal');
 
-  <!-- SEO -->
-  <meta name="description" content="Take LSB’s dynamic skincare quiz to find your skin type and get a custom routine. Curated by Lyds Skin Bar in Provo, Utah." />
-  <meta name="robots" content="index, follow" />
+const WEBHOOK_TOKEN = "LSB_SUPER_SECRET_2025"; // must match Apps Script
 
-  <!-- Open Graph -->
-  <meta property="og:title" content="LSB Skincare Quiz" />
-  <meta property="og:description" content="Find your skin type and get a custom skincare routine curated by Lyds Skin Bar in Provo, Utah." />
-  <meta property="og:type" content="website" />
-  <meta property="og:url" content="https://natehansen10.github.io/LSB-skincare-quiz/" />
-  <meta property="og:image" content="https://natehansen10.github.io/LSB-skincare-quiz/images/lsb-logo.png" />
+// ---------------------
+// State
+// ---------------------
+let userAnswers = [];
+let currentStep = 'q1';
+let provisionalType = null; // 'dry' | 'oily' | 'normal'
+let hasAcne = false;        // user reports breakouts at Monthly/Weekly/Daily
+let hasScars = false;       // last question, applies as a modifier
 
-  <!-- Preconnect & Fonts -->
-  <link rel="preconnect" href="https://use.typekit.net" crossorigin>
-  <link rel="stylesheet" href="https://use.typekit.net/uby7sdn.css">
+// ---------------------
+// Branching data (scarring asked LAST for every path)
+// ---------------------
+const quizData = {
+  // Q1 — Oil return time (entry)
+  q1: {
+    question: "How long after cleansing in the morning do you begin to feel oily?",
+    options: [
+      { text: "Never / After 12+ hours", next: "q2a" }, // dryness path
+      { text: "6–9 hours after", next: "q2b" },         // oil distribution path
+      { text: "Immediately to 5 hours after", next: "q2b" },
+    ],
+  },
 
-  <!-- Main stylesheet -->
-  <link rel="stylesheet" href="style.css" />
-</head>
-<body>
-  <noscript>
-    <p style="text-align:center; padding:1rem; background:#fdd; color:#900;">
-      This quiz needs JavaScript to run. Please enable it in your browser.
-    </p>
-  </noscript>
+  // Q2a — Dryness frequency (if Q1 = Never/12+)
+  q2a: {
+    question: "How often does your skin feel tight, dry, or flaky?",
+    options: [
+      { text: "Often", next: "q3", setProvisional: "dry" },         // Provisional Dry
+      { text: "Sometimes", next: "q3", setProvisional: "normal" },  // Provisional Normal
+      { text: "Never", next: "q3", setProvisional: "normal" },
+    ],
+  },
 
-  <!-- HERO -->
-  <header class="hero" role="banner">
-    <div class="hero__inner">
-      <img src="images/lsb-logo.png" alt="Lyds Skin Bar Logo" class="hero-logo" />
-      <span class="badge">Your skin, our obsession</span>
-      <h1>Find Your Skin Type. Get Your Custom Routine.</h1>
-      <p>Take our quick, dynamic quiz to identify your skin type and get product recommendations curated by Lyds Skin Bar in Provo, Utah.</p>
-    </div>
-  </header>
+  // Q2b — Oil distribution (if Q1 = fast or 6–9h)
+  q2b: {
+    question: "Where does your skin feel oily?",
+    options: [
+      { text: "All over", next: "q3", setProvisional: "oily" },     // Provisional Oily
+      { text: "Only some oily areas", next: "q3", setProvisional: "normal" }, // Provisional Normal
+    ],
+  },
 
-  <!-- QUIZ SECTION -->
-  <section class="section" aria-label="Skincare quiz">
-    <div class="quiz-wrap" id="quiz-card">
-      <div class="progress" aria-hidden="true">
-        <span id="progress-bar"></span>
+  // Q3 — Breakout frequency (sets acne yes/no; we will ALWAYS ask scarring next)
+  q3: {
+    question: "How often do you notice new breakouts?",
+    options: [
+      { text: "Never",   next: "q4", setAcne: false },
+      { text: "Monthly", next: "q4", setAcne: true  },
+      { text: "Weekly",  next: "q4", setAcne: true  },
+      { text: "Daily",   next: "q4", setAcne: true  },
+    ],
+  },
+
+  // Q4 — Scarring (ALWAYS LAST; acts as a modifier)
+  q4: {
+    question: "Do you have acne scarring?",
+    options: [
+      { text: "Yes", next: "compute-final", setScars: true  },
+      { text: "No",  next: "compute-final", setScars: false },
+    ],
+  },
+};
+
+// ---------------------
+// Results — 12 outcomes (base ± scarring)
+// ---------------------
+const results = {
+  // Oily
+  "result-oily": {
+    label: "Oily skin",
+    recommendation: ["Ultra Gentle Cleanser", "Mandelic Serum 8%", "HydraBalance Gel", "Moisture Balance Toner"],
+    treatment: "Chemical Peel",
+    product_url: "https://www.lydsskinbar.com/s/shop",
+    service_url: "https://www.lydsskinbar.com/s/appointments",
+  },
+  "result-oily-scar": {
+    label: "Oily skin with scarring",
+    recommendation: ["Ultra Gentle Cleanser", "Mandelic Serum 8%", "HydraBalance Gel", "Glow-Tone Serum"],
+    treatment: "Microneedling",
+    product_url: "https://www.lydsskinbar.com/s/shop",
+    service_url: "https://www.lydsskinbar.com/s/appointments",
+  },
+
+  // Dry
+  "result-dry": {
+    label: "Dry skin",
+    recommendation: ["Ultra Gentle Cleanser", "Cell Balm", "Cran-Peptide Cream", "Hydrabalance Gel"],
+    treatment: "Hydrating Glow Facial",
+    product_url: "https://www.lydsskinbar.com/s/shop",
+    service_url: "https://www.lydsskinbar.com/s/appointments",
+  },
+  "result-dry-scar": {
+    label: "Dry skin with scarring",
+    recommendation: ["Ultra Gentle Cleanser", "Cell Balm", "Cran-Peptide Cream", "Glow-Tone Serum"],
+    treatment: "Microneedling",
+    product_url: "https://www.lydsskinbar.com/s/shop",
+    service_url: "https://www.lydsskinbar.com/s/appointments",
+  },
+
+  // Normal
+  "result-normal": {
+    label: "Normal skin",
+    recommendation: ["Ultra Gentle Cleanser", "Mandelic Serum 8%", "Cran-Peptide Cream", "Daily SPF-30"],
+    treatment: "Hydrating Glow Facial",
+    product_url: "https://www.lydsskinbar.com/s/shop",
+    service_url: "https://www.lydsskinbar.com/s/appointments",
+  },
+  "result-normal-scar": {
+    label: "Normal skin with scarring",
+    recommendation: ["Ultra Gentle Cleanser", "Mandelic Serum 8%", "Glow-Tone Serum", "Daily SPF-30"],
+    treatment: "Microneedling",
+    product_url: "https://www.lydsskinbar.com/s/shop",
+    service_url: "https://www.lydsskinbar.com/s/appointments",
+  },
+
+  // Acne-prone (normal base)
+  "result-acne-prone": {
+    label: "Acne Prone Skin",
+    recommendation: ["Ultra Gentle Cleanser", "Mandelic Serum 8%", "Cran-Peptide Cream", "Acne Med 5%"],
+    treatment: "Acne Bootcamp or Acne Facial",
+    product_url: "https://www.lydsskinbar.com/s/shop",
+    service_url: "https://www.lydsskinbar.com/s/appointments",
+  },
+  "result-acne-prone-scar": {
+    label: "Acne Prone Skin with scarring",
+    recommendation: ["Ultra Gentle Cleanser", "Mandelic Serum 8%", "Cran-Peptide Cream", "Glow-Tone Serum"],
+    treatment: "Microneedling with Chemical Peel",
+    product_url: "https://www.lydsskinbar.com/s/shop",
+    service_url: "https://www.lydsskinbar.com/s/appointments",
+  },
+
+  // Dry + Acne-prone
+  "result-dry-acne": {
+    label: "Dry, Acne Prone skin",
+    recommendation: ["Ultra Gentle Cleanser", "Mandelic Serum 5%", "Cran-Peptide Cream", "Daily SPF-30"],
+    treatment: "Chemical Peel",
+    product_url: "https://www.lydsskinbar.com/s/shop",
+    service_url: "https://www.lydsskinbar.com/s/appointments",
+  },
+  "result-dry-acne-scar": {
+    label: "Dry, Acne Prone skin with scarring",
+    recommendation: ["Ultra Gentle Cleanser", "Mandelic Serum 8%", "Cran-Peptide Cream", "Daily SPF-30"],
+    treatment: "Microneedling with Chemical Peel",
+    product_url: "https://www.lydsskinbar.com/s/shop",
+    service_url: "https://www.lydsskinbar.com/s/appointments",
+  },
+
+  // Oily + Acne-prone
+  "result-oily-acne": {
+    label: "Oily, Acne Prone Skin",
+    recommendation: ["Ultra Gentle Cleanser", "Mandelic Serum 11%", "Hydrabalance Gel", "Acne Med 5%"],
+    treatment: "Chemical Peel",
+    product_url: "https://www.lydsskinbar.com/s/shop",
+    service_url: "https://www.lydsskinbar.com/s/appointments",
+  },
+  "result-oily-acne-scar": {
+    label: "Oily, Acne Prone Skin with scarring",
+    recommendation: ["Ultra Gentle Cleanser", "Mandelic Serum 11%", "Hydrabalance Gel", "Glow-Tone Serum"],
+    treatment: "Microneedling with Chemical Peel",
+    product_url: "https://www.lydsskinbar.com/s/shop",
+    service_url: "https://www.lydsskinbar.com/s/appointments",
+  },
+};
+
+// ---------------------
+// UTM helpers
+// ---------------------
+function slugify(str) {
+  return String(str)
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+}
+
+function withUTM(baseUrl, { source="skinquiz", medium="website", campaign="", content="" } = {}) {
+  const url = baseUrl.startsWith("http")
+    ? new URL(baseUrl)
+    : new URL(baseUrl, window.location.origin);
+
+  url.searchParams.set("utm_source", source);
+  url.searchParams.set("utm_medium", medium);
+  if (campaign) url.searchParams.set("utm_campaign", campaign);
+  if (content)  url.searchParams.set("utm_content", content);
+  return url.toString();
+}
+
+// ---------------------
+// Product image map
+// ---------------------
+const productImages = {
+  "Ultra Gentle Cleanser": "images/Ultra-Gentle-Cleanser-16oz.png",
+  "Hydrabalance Gel": "images/Hydra-Balance-Gel.png",
+  "Cran-Peptide Cream": "images/Cran-Peptide-Cream-1.png",
+  "Moisture Balance Toner": "images/Moisture-Balance-Toner.png",
+  "Daily SPF 30 Lotion": "images/Daily-SPF30-Plus.png",
+  "Daily SPF-30": "images/Daily-SPF30-Plus.png",
+  "Mandelic Serum 5%": "images/Mandelic-Serum-5.png",
+  "Mandelic Serum 8%": "images/Mandelic-Serum-8.png",
+  "Mandelic Serum 11%": "images/Mandelic-Serum-11.png",
+  "Acne Med 5%": "images/Acne-Med-5.png",
+  "Cell Balm": "images/Cell-Balm.png",
+  "Glow-Tone Serum": "images/Glow-Tone-Serum.png",
+};
+
+// Normalize recommendation labels to base product keys
+function baseProductName(label){
+  return label.split(" (")[0].trim();
+}
+
+// Build the image gallery HTML for the given recommendations (gallery only, no text list)
+function productGalleryHTML(recommendations, campaignSlug){
+  const items = recommendations.map((rec) => {
+    const base = baseProductName(rec);
+    const imgPath = productImages[base];
+    const imgHTML = imgPath
+      ? `<img src="${imgPath}" alt="${base}" style="width:100px; height:auto; border-radius:6px; border:1px solid #eee; background:#fff; padding:5px; display:block; margin:0 auto 6px;" />`
+      : `<div style="width:100px;height:100px;border:1px dashed #ccc;border-radius:6px;display:flex;align-items:center;justify-content:center;margin:0 auto 6px;font-size:.75rem;background:#fafafa;">${base}</div>`;
+
+    const shopLink = withUTM(
+      `${resultsBaseShopURL()}?search=${encodeURIComponent(base)}`,
+      { campaign: campaignSlug, content: slugify(base) }
+    );
+
+    return `
+      <div class="product-item" style="text-align:center; max-width:120px;">
+        <a href="${shopLink}" target="_blank" rel="noopener" style="text-decoration:none;">
+          ${imgHTML}
+          <span style="display:block; font-size:.9rem; line-height:1.1;">${base}</span>
+        </a>
       </div>
-      <div id="quiz"></div>
+    `;
+  }).join("");
+
+  if (!items.trim()) return "";
+  return `<div class="product-recommendations" style="margin-top:16px;">${items}</div>`;
+}
+
+function resultsBaseShopURL(){
+  return "https://www.lydsskinbar.com/s/shop";
+}
+
+// ---------------------
+// Helpers
+// ---------------------
+function updateProgress(stepKey){
+  // q1 ~15%, q2 ~45%, q3 ~70%, q4 ~95%, result ~100%
+  let pct = 15;
+  if (stepKey.startsWith('q2')) pct = 45;
+  else if (stepKey === 'q3') pct = 70;
+  else if (stepKey === 'q4') pct = 95;
+  else if (stepKey.startsWith('result')) pct = 100;
+  if (progressEl) progressEl.style.width = pct + '%';
+}
+
+function restartQuiz(){
+  userAnswers = [];
+  currentStep = 'q1';
+  provisionalType = null;
+  hasAcne = false;
+  hasScars = false;
+  renderQuestion('q1');
+}
+
+// Build final result key from state
+function computeFinalKey(){
+  // Choose base
+  let baseKey;
+  if (hasAcne) {
+    if (provisionalType === 'dry')      baseKey = 'result-dry-acne';
+    else if (provisionalType === 'oily') baseKey = 'result-oily-acne';
+    else                                 baseKey = 'result-acne-prone'; // normal + acne
+  } else {
+    if (provisionalType === 'dry')      baseKey = 'result-dry';
+    else if (provisionalType === 'oily') baseKey = 'result-oily';
+    else                                 baseKey = 'result-normal';
+  }
+
+  // Apply scarring modifier
+  if (hasScars) return `${baseKey}-scar`;
+  return baseKey;
+}
+
+// Transition helper (applies state changes and returns next)
+function getNextFrom(stepKey, answerText){
+  const node = quizData[stepKey];
+  if (!node) return 'q1';
+  const opt = node.options.find(o => o.text === answerText);
+  if (!opt) return 'q1';
+
+  if (typeof opt.setProvisional !== 'undefined') provisionalType = opt.setProvisional;
+  if (typeof opt.setAcne !== 'undefined')        hasAcne = !!opt.setAcne;
+  if (typeof opt.setScars !== 'undefined')       hasScars = !!opt.setScars;
+
+  if (opt.next === 'compute-final') {
+    return computeFinalKey();
+  }
+  return opt.next;
+}
+
+// Recompute the step by replaying answers (used for Back)
+function stepFromAnswers(answers){
+  provisionalType = null;
+  hasAcne = false;
+  hasScars = false;
+
+  if (!answers || answers.length === 0) return 'q1';
+  let step = 'q1';
+
+  for (const ans of answers) {
+    const next = getNextFrom(step, ans.answer);
+    step = next || 'q1';
+    if (step.startsWith('result')) return step;
+  }
+  return step;
+}
+
+// ---------------------
+// UI
+// ---------------------
+function renderQuestion(stepKey){
+  currentStep = stepKey;
+  updateProgress(stepKey);
+
+  const data = quizData[stepKey];
+  quizEl.innerHTML = `
+    <h2 class="question">${data.question}</h2>
+    <div class="options" id="options"></div>
+    <div class="links-row" style="margin-top:1rem;">
+      ${userAnswers.length > 0 ? `<button class="btn btn-outline" id="back-btn">Back</button>` : ''}
+      ${userAnswers.length > 0 ? `<button class="btn btn-outline" id="restart-btn">Start Over</button>` : ''}
     </div>
-  </section>
+  `;
 
-  <!-- Parallax divider -->
-  <div class="parallax-strip" aria-hidden="true"></div>
+  const optionsEl = document.getElementById('options');
+  data.options.forEach(opt => {
+    const b = document.createElement('button');
+    b.className = 'option-btn';
+    b.type = 'button';
+    b.textContent = opt.text;
+    b.addEventListener('click', () => {
+      userAnswers.push({ question: data.question, answer: opt.text });
+      const next = getNextFrom(stepKey, opt.text);
+      if (next.startsWith('result')) {
+        showResult(next);
+      } else {
+        renderQuestion(next);
+      }
+    });
+    optionsEl.appendChild(b);
+  });
 
-  <!-- Modal -->
-  <div class="modal" id="notify-modal" role="dialog" aria-modal="true" aria-labelledby="notify-title">
-    <div class="modal__card">
-      <h3 id="notify-title">Your estheticians are reviewing your responses</h3>
-      <p>We’ll deliver your custom routine as soon as possible.</p>
+  const backBtn = document.getElementById('back-btn');
+  if (backBtn) backBtn.addEventListener('click', () => {
+    if (userAnswers.length > 0) {
+      userAnswers.pop();
+      const prev = stepFromAnswers(userAnswers);
+      if (prev.startsWith('result')) showResult(prev); else renderQuestion(prev);
+    }
+  });
+
+  const restartBtn = document.getElementById('restart-btn');
+  if (restartBtn) restartBtn.addEventListener('click', restartQuiz);
+}
+
+function showResult(resultKey){
+  currentStep = resultKey;
+  updateProgress('result');
+
+  const result = results[resultKey];
+  const campaignSlug = slugify(resultKey.replace(/^result-/, "")); // e.g., "oily_acne_scar"
+
+  const gallery = productGalleryHTML(result.recommendation, campaignSlug);
+
+  // UTM-tagged CTAs (use the specific URLs in each result)
+  const shopURL = withUTM(result.product_url, {
+    campaign: campaignSlug,
+    content: "shop_button"
+  });
+  const bookURL = withUTM(result.service_url, {
+    campaign: campaignSlug,
+    content: "book_button"
+  });
+
+  quizEl.innerHTML = `
+    <h2 class="question">Your Skin Type: ${result.label}</h2>
+    <p>We recommend starting here:</p>
+
+    ${gallery}
+
+    <div class="links-row" style="margin:1rem 0 .5rem;">
+      <a class="btn btn-outline" style="text-decoration:none;" href="${shopURL}" target="_blank" rel="noopener">Shop LSB Products</a>
+      <a class="btn btn-outline" style="text-decoration:none;" href="${bookURL}" target="_blank" rel="noopener">Book ${result.treatment} at LSB</a>
+      <button id="restart-btn-result" type="button" class="btn btn-outline">Retake Quiz</button>
     </div>
-  </div>
 
-  <!-- Quiz logic -->
-  <script src="script.js" defer></script>
-</body>
-</html>
+    <hr style="border:none; border-top:1px solid #eee; margin: 1rem 0 1.25rem;" />
+
+    <h3 style="margin:.25rem 0 .5rem;">Want a custom routine from our estheticians?</h3>
+    <p style="margin-top:0">Share your info and we’ll reach out.</p>
+
+    <form id="followup-form" autocomplete="on" novalidate>
+      <label for="name">Name</label>
+      <input id="name" name="name" type="text" placeholder="LSB" required />
+
+      <label for="email">Email</label>
+      <input id="email" name="email" type="email" placeholder="Lydsskinbar@gmail.com" required inputmode="email" />
+
+      <label for="phone">Phone (optional)</label>
+      <input id="phone" name="phone" type="tel" placeholder="(801) 717-9313" inputmode="tel" />
+
+      <div style="display:flex; gap:.75rem; flex-wrap:wrap; margin-top:.5rem;">
+        <button id="submit-btn" type="submit" class="btn btn-primary">Get Custom Routine</button>
+      </div>
+    </form>
+    <p id="confirmation" style="display:none; color: green; margin-top:.75rem;">Thank you! We'll be in touch soon.</p>
+  `;
+
+  document.getElementById('restart-btn-result').addEventListener('click', restartQuiz);
+
+  // Analytics hook
+  try {
+    window.dispatchEvent(new CustomEvent("lsbQuizComplete", {
+      detail: { result_key: resultKey, utm_campaign: campaignSlug, answers: userAnswers.slice(), provisionalType, hasAcne, hasScars }
+    }));
+  } catch (e) {}
+
+  const form = document.getElementById('followup-form');
+  const submitBtn = document.getElementById('submit-btn');
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+
+    const name  = document.getElementById('name').value.trim();
+    const email = document.getElementById('email').value.trim();
+    const phone = document.getElementById('phone').value.trim();
+
+    if (!name || !email) {
+      alert("Please enter your name and a valid email.");
+      return;
+    }
+
+    submitBtn.disabled = true;
+    const originalText = submitBtn.textContent;
+    submitBtn.textContent = "Submitting…";
+
+    const payload = {
+      answers: userAnswers,
+      result: result.label,
+      result_key: resultKey,
+      utm_campaign: campaignSlug,
+      provisionalType,
+      hasAcne,
+      hasScars,
+      name, email, phone,
+      token: WEBHOOK_TOKEN
+    };
+    const fd = new FormData();
+    fd.append('payload', JSON.stringify(payload));
+
+    try {
+      const res = await fetch('https://script.google.com/macros/s/AKfycbx99ra8wZyF-LNEeXiBOxjyP3ilmFuHiBhQUcWsNL1ueFLfs2Lkrd6feIuXo09Fmco1lQ/exec', {
+        method: 'POST',
+        body: fd
+      });
+
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+      form.style.display = 'none';
+      const c = document.getElementById('confirmation');
+      c.innerHTML = `Thank you! We'll be in touch soon. <br><br>
+        <button id="retake" class="btn btn-outline">Retake Quiz</button>`;
+      c.style.display = 'block';
+
+      document.getElementById('retake').addEventListener('click', restartQuiz);
+
+      if (modal) {
+        modal.classList.add('show');
+        setTimeout(() => modal.classList.remove('show'), 1500);
+      }
+
+    } catch (err) {
+      console.error('Sheets error', err);
+      alert("Sorry, we couldn’t submit right now. Please try again in a moment.");
+      submitBtn.disabled = false;
+      submitBtn.textContent = originalText;
+    }
+  });
+}
+
+// ---------------------
+// INIT
+// ---------------------
+renderQuestion('q1');

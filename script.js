@@ -1,5 +1,5 @@
 // =====================
-// QUIZ LOGIC + SHEETS
+// QUIZ LOGIC + SHEETS (CLEANED)
 // =====================
 const quizEl = document.getElementById('quiz');
 const progressEl = document.getElementById('progress-bar');
@@ -77,14 +77,14 @@ const results = {
   // Oily
   "result-oily": {
     label: "Oily skin",
-    recommendation: ["Ultra Gentle Cleanser", "Mandelic Serum 8%", "HydraBalance Gel", "Moisture Balance Toner"],
+    recommendation: ["Ultra Gentle Cleanser", "Mandelic Serum 8%", "Hydrabalance Gel", "Moisture Balance Toner"],
     treatment: "Chemical Peel",
     product_url: "https://www.lydsskinbar.com/s/shop",
     service_url: "https://www.lydsskinbar.com/s/appointments",
   },
   "result-oily-scar": {
     label: "Oily skin with scarring",
-    recommendation: ["Ultra Gentle Cleanser", "Mandelic Serum 8%", "HydraBalance Gel", "Glow-Tone Serum"],
+    recommendation: ["Ultra Gentle Cleanser", "Mandelic Serum 8%", "Hydrabalance Gel", "Glow-Tone Serum"],
     treatment: "Microneedling",
     product_url: "https://www.lydsskinbar.com/s/shop",
     service_url: "https://www.lydsskinbar.com/s/appointments",
@@ -331,6 +331,10 @@ function renderQuestion(stepKey){
   updateProgress(stepKey);
 
   const data = quizData[stepKey];
+  if (!quizEl) {
+    console.error('Missing #quiz element');
+    return;
+  }
   quizEl.innerHTML = `
     <h2 class="question">${data.question}</h2>
     <div class="options" id="options"></div>
@@ -390,6 +394,7 @@ function showResult(resultKey){
     content: "book_button"
   });
 
+  if (!quizEl) return;
   quizEl.innerHTML = `
     <h2 class="question">Your Skin Type: ${result.label}</h2>
     <p>We recommend starting here:</p>
@@ -499,4 +504,8 @@ function showResult(resultKey){
 // ---------------------
 // INIT
 // ---------------------
-renderQuestion('q1');
+if (quizEl) {
+  renderQuestion('q1');
+} else {
+  console.error('Missing #quiz element — ensure this script runs after the HTML.');
+}

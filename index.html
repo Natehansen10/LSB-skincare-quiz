@@ -1,502 +1,297 @@
-// =====================
-// QUIZ LOGIC + SHEETS
-// =====================
-const quizEl = document.getElementById('quiz');
-const progressEl = document.getElementById('progress-bar');
-const modal = document.getElementById('notify-modal');
-
-const WEBHOOK_TOKEN = "LSB_SUPER_SECRET_2025"; // must match Apps Script
-
-// ---------------------
-// State
-// ---------------------
-let userAnswers = [];
-let currentStep = 'q1';
-let provisionalType = null; // 'dry' | 'oily' | 'normal'
-let hasAcne = false;        // user reports breakouts at Monthly/Weekly/Daily
-let hasScars = false;       // last question, applies as a modifier
-
-// ---------------------
-// Branching data (scarring asked LAST for every path)
-// ---------------------
-const quizData = {
-  // Q1 — Oil return time (entry)
-  q1: {
-    question: "How long after cleansing in the morning do you begin to feel oily?",
-    options: [
-      { text: "Never / After 12+ hours", next: "q2a" }, // dryness path
-      { text: "6–9 hours after", next: "q2b" },         // oil distribution path
-      { text: "Immediately to 5 hours after", next: "q2b" },
-    ],
-  },
-
-  // Q2a — Dryness frequency (if Q1 = Never/12+)
-  q2a: {
-    question: "How often does your skin feel tight, dry, or flaky?",
-    options: [
-      { text: "Often", next: "q3", setProvisional: "dry" },         // Provisional Dry
-      { text: "Sometimes", next: "q3", setProvisional: "normal" },  // Provisional Normal
-      { text: "Never", next: "q3", setProvisional: "normal" },
-    ],
-  },
-
-  // Q2b — Oil distribution (if Q1 = fast or 6–9h)
-  q2b: {
-    question: "Where does your skin feel oily?",
-    options: [
-      { text: "All over", next: "q3", setProvisional: "oily" },     // Provisional Oily
-      { text: "Only some oily areas", next: "q3", setProvisional: "normal" }, // Provisional Normal
-    ],
-  },
-
-  // Q3 — Breakout frequency (sets acne yes/no; we will ALWAYS ask scarring next)
-  q3: {
-    question: "How often do you notice new breakouts?",
-    options: [
-      { text: "Never",   next: "q4", setAcne: false },
-      { text: "Monthly", next: "q4", setAcne: true  },
-      { text: "Weekly",  next: "q4", setAcne: true  },
-      { text: "Daily",   next: "q4", setAcne: true  },
-    ],
-  },
-
-  // Q4 — Scarring (ALWAYS LAST; acts as a modifier)
-  q4: {
-    question: "Do you have acne scarring?",
-    options: [
-      { text: "Yes", next: "compute-final", setScars: true  },
-      { text: "No",  next: "compute-final", setScars: false },
-    ],
-  },
-};
-
-// ---------------------
-// Results — 12 outcomes (base ± scarring)
-// ---------------------
-const results = {
-  // Oily
-  "result-oily": {
-    label: "Oily skin",
-    recommendation: ["Ultra Gentle Cleanser", "Mandelic Serum 8%", "HydraBalance Gel", "Moisture Balance Toner"],
-    treatment: "Chemical Peel",
-    product_url: "https://www.lydsskinbar.com/s/shop",
-    service_url: "https://www.lydsskinbar.com/s/appointments",
-  },
-  "result-oily-scar": {
-    label: "Oily skin with scarring",
-    recommendation: ["Ultra Gentle Cleanser", "Mandelic Serum 8%", "HydraBalance Gel", "Glow-Tone Serum"],
-    treatment: "Microneedling",
-    product_url: "https://www.lydsskinbar.com/s/shop",
-    service_url: "https://www.lydsskinbar.com/s/appointments",
-  },
-
-  // Dry
-  "result-dry": {
-    label: "Dry skin",
-    recommendation: ["Ultra Gentle Cleanser", "Cell Balm", "Cran-Peptide Cream", "Hydrabalance Gel"],
-    treatment: "Hydrating Glow Facial",
-    product_url: "https://www.lydsskinbar.com/s/shop",
-    service_url: "https://www.lydsskinbar.com/s/appointments",
-  },
-  "result-dry-scar": {
-    label: "Dry skin with scarring",
-    recommendation: ["Ultra Gentle Cleanser", "Cell Balm", "Cran-Peptide Cream", "Glow-Tone Serum"],
-    treatment: "Microneedling",
-    product_url: "https://www.lydsskinbar.com/s/shop",
-    service_url: "https://www.lydsskinbar.com/s/appointments",
-  },
-
-  // Normal
-  "result-normal": {
-    label: "Normal skin",
-    recommendation: ["Ultra Gentle Cleanser", "Mandelic Serum 8%", "Cran-Peptide Cream", "Daily SPF-30"],
-    treatment: "Hydrating Glow Facial",
-    product_url: "https://www.lydsskinbar.com/s/shop",
-    service_url: "https://www.lydsskinbar.com/s/appointments",
-  },
-  "result-normal-scar": {
-    label: "Normal skin with scarring",
-    recommendation: ["Ultra Gentle Cleanser", "Mandelic Serum 8%", "Glow-Tone Serum", "Daily SPF-30"],
-    treatment: "Microneedling",
-    product_url: "https://www.lydsskinbar.com/s/shop",
-    service_url: "https://www.lydsskinbar.com/s/appointments",
-  },
-
-  // Acne-prone (normal base)
-  "result-acne-prone": {
-    label: "Acne Prone Skin",
-    recommendation: ["Ultra Gentle Cleanser", "Mandelic Serum 8%", "Cran-Peptide Cream", "Acne Med 5%"],
-    treatment: "Acne Bootcamp or Acne Facial",
-    product_url: "https://www.lydsskinbar.com/s/shop",
-    service_url: "https://www.lydsskinbar.com/s/appointments",
-  },
-  "result-acne-prone-scar": {
-    label: "Acne Prone Skin with scarring",
-    recommendation: ["Ultra Gentle Cleanser", "Mandelic Serum 8%", "Cran-Peptide Cream", "Glow-Tone Serum"],
-    treatment: "Microneedling with Chemical Peel",
-    product_url: "https://www.lydsskinbar.com/s/shop",
-    service_url: "https://www.lydsskinbar.com/s/appointments",
-  },
-
-  // Dry + Acne-prone
-  "result-dry-acne": {
-    label: "Dry, Acne Prone skin",
-    recommendation: ["Ultra Gentle Cleanser", "Mandelic Serum 5%", "Cran-Peptide Cream", "Daily SPF-30"],
-    treatment: "Chemical Peel",
-    product_url: "https://www.lydsskinbar.com/s/shop",
-    service_url: "https://www.lydsskinbar.com/s/appointments",
-  },
-  "result-dry-acne-scar": {
-    label: "Dry, Acne Prone skin with scarring",
-    recommendation: ["Ultra Gentle Cleanser", "Mandelic Serum 8%", "Cran-Peptide Cream", "Daily SPF-30"],
-    treatment: "Microneedling with Chemical Peel",
-    product_url: "https://www.lydsskinbar.com/s/shop",
-    service_url: "https://www.lydsskinbar.com/s/appointments",
-  },
-
-  // Oily + Acne-prone
-  "result-oily-acne": {
-    label: "Oily, Acne Prone Skin",
-    recommendation: ["Ultra Gentle Cleanser", "Mandelic Serum 11%", "Hydrabalance Gel", "Acne Med 5%"],
-    treatment: "Chemical Peel",
-    product_url: "https://www.lydsskinbar.com/s/shop",
-    service_url: "https://www.lydsskinbar.com/s/appointments",
-  },
-  "result-oily-acne-scar": {
-    label: "Oily, Acne Prone Skin with scarring",
-    recommendation: ["Ultra Gentle Cleanser", "Mandelic Serum 11%", "Hydrabalance Gel", "Glow-Tone Serum"],
-    treatment: "Microneedling with Chemical Peel",
-    product_url: "https://www.lydsskinbar.com/s/shop",
-    service_url: "https://www.lydsskinbar.com/s/appointments",
-  },
-};
-
-// ---------------------
-// UTM helpers
-// ---------------------
-function slugify(str) {
-  return String(str)
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "_")
-    .replace(/^_+|_+$/g, "");
+:root {
+  --bg: #F4DCD4;
+  --bg-2: #FAF6F2;
+  --card: #FFFFFF;
+  --text: #332C2F;
+  --muted: #5C5457;
+  --brand-100: #F4DCD4;
+  --brand-200: #F4C9BF;
+  --brand-300: #FBAD9A;
+  --brand-400: #FAA091;
+  --brand-500: #F49580;
+  --brand-600: #E87C69;
+  --brand-700: #F16444;
+  --brand-800: #F44831;
+  --accent: var(--brand-200);
+  --accent-strong: var(--brand-600);
+  --accent-pop: var(--brand-800);
+  --radius: 16px;
+  --shadow: 0 10px 30px rgba(0,0,0,.08);
 }
 
-function withUTM(baseUrl, { source="skinquiz", medium="website", campaign="", content="" } = {}) {
-  const url = baseUrl.startsWith("http")
-    ? new URL(baseUrl)
-    : new URL(baseUrl, window.location.origin);
+html, body { height: 100%; }
+html { -webkit-text-size-adjust: 100%; } /* avoid iOS font zoom */
 
-  url.searchParams.set("utm_source", source);
-  url.searchParams.set("utm_medium", medium);
-  if (campaign) url.searchParams.set("utm_campaign", campaign);
-  if (content)  url.searchParams.set("utm_content", content);
-  return url.toString();
+body {
+  margin: 0;
+  font-family: helvetica, "Helvetica Neue", Arial, sans-serif;
+  color: var(--muted);
+  background: var(--bg-2);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+
+  /* respect iPhone notches / safe areas */
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
 }
 
-// ---------------------
-// Product image map
-// ---------------------
-const productImages = {
-  "Ultra Gentle Cleanser": "images/Ultra-Gentle-Cleanser-16oz.png",
-  "Hydrabalance Gel": "images/Hydra-Balance-Gel.png",
-  "Cran-Peptide Cream": "images/Cran-Peptide-Cream-1.png",
-  "Moisture Balance Toner": "images/Moisture-Balance-Toner.png",
-  "Daily SPF 30 Lotion": "images/Daily-SPF30-Plus.png",
-  "Daily SPF-30": "images/Daily-SPF30-Plus.png",
-  "Mandelic Serum 5%": "images/Mandelic-Serum-5.png",
-  "Mandelic Serum 8%": "images/Mandelic-Serum-8.png",
-  "Mandelic Serum 11%": "images/Mandelic-Serum-11.png",
-  "Acne Med 5%": "images/Acne-Med-5.png",
-  "Cell Balm": "images/Cell-Balm.png",
-  "Glow-Tone Serum": "images/Glow-Tone-Serum.png",
-};
+img { max-width: 100%; height: auto; } /* prevent overflow */
 
-// Normalize recommendation labels to base product keys
-function baseProductName(label){
-  return label.split(" (")[0].trim();
+h1, h2, h3 { color: var(--text); letter-spacing: .2px; }
+
+/* Hero */
+.hero-logo {
+  display: block;
+  max-width: 180px;
+  height: auto;
+  margin: 0 auto 1rem;
+}
+@media (max-width: 480px) {
+  .hero-logo { max-width: 140px; }
 }
 
-// Build the image gallery HTML for the given recommendations (gallery only, no text list)
-function productGalleryHTML(recommendations, campaignSlug){
-  const items = recommendations.map((rec) => {
-    const base = baseProductName(rec);
-    const imgPath = productImages[base];
-    const imgHTML = imgPath
-      ? `<img src="${imgPath}" alt="${base}" style="width:100px; height:auto; border-radius:6px; border:1px solid #eee; background:#fff; padding:5px; display:block; margin:0 auto 6px;" />`
-      : `<div style="width:100px;height:100px;border:1px dashed #ccc;border-radius:6px;display:flex;align-items:center;justify-content:center;margin:0 auto 6px;font-size:.75rem;background:#fafafa;">${base}</div>`;
+.hero {
+  position: relative;
+  min-height: 55vh;
+  display: grid;
+  place-items: center;
+  color: var(--text);
+  overflow: hidden;
+  background: linear-gradient(180deg, var(--brand-200), var(--bg-2));
+  background-attachment: fixed;
+}
+.hero__inner { text-align: center; padding: 6rem 1.25rem 5rem; max-width: 920px; }
+.badge {
+  display:inline-block; padding:.4rem .75rem; border-radius:999px;
+  background: #ffffffaa; color: var(--text); font-size:.85rem;
+  margin-bottom: .75rem; border:1px solid #ffffff88;
+}
+.hero h1 { font-size: clamp(2rem, 3vw + 1rem, 3.25rem); margin:.25rem 0 1.75rem; }
+.hero p  { font-size: clamp(1rem, .6vw + .9rem, 1.125rem); max-width: 720px; margin: 0 auto; }
 
-    const shopLink = withUTM(
-      `${resultsBaseShopURL()}?search=${encodeURIComponent(base)}`,
-      { campaign: campaignSlug, content: slugify(base) }
-    );
-
-    return `
-      <div class="product-item" style="text-align:center; max-width:120px;">
-        <a href="${shopLink}" target="_blank" rel="noopener" style="text-decoration:none;">
-          ${imgHTML}
-          <span style="display:block; font-size:.9rem; line-height:1.1;">${base}</span>
-        </a>
-      </div>
-    `;
-  }).join("");
-
-  if (!items.trim()) return "";
-  return `<div class="product-recommendations" style="margin-top:16px;">${items}</div>`;
+/* Section & Card */
+.section { padding: 3.5rem 1rem; }
+.quiz-wrap {
+  max-width: 720px; margin: 0 auto; background: var(--card);
+  border-radius: var(--radius); box-shadow: var(--shadow);
+  padding: clamp(1rem, 2.5vw, 2rem);
 }
 
-function resultsBaseShopURL(){
-  return "https://www.lydsskinbar.com/s/shop";
+/* Progress */
+.progress { height: 6px; background: #e8e2df; border-radius: 999px; overflow:hidden; margin-bottom:1rem; }
+.progress > span { display:block; height:100%; background: var(--accent); width:0%; transition: width .35s ease; }
+
+/* Q&A */
+.question { margin: .25rem 0 1.25rem; font-size: clamp(1.1rem, .9vw + 1rem, 1.35rem); color: var(--text); }
+.options { display: grid; gap: .65rem; margin-bottom: 1rem; }
+.option-btn {
+  text-align: left; padding: 0.9rem 1rem; border: 1px solid #F44831;
+  background: #fff0f0; border-radius: 12px; cursor: pointer;
+  transition: transform .06s ease, box-shadow .2s ease, border-color .2s ease;
+  min-height: 44px; /* comfortable tap target */
+}
+.option-btn:hover { box-shadow: 0 6px 20px rgba(0,0,0,.06); border-color: var(--accent); }
+.option-btn:active { transform: translateY(1px); }
+
+/* Buttons */
+.btn {
+  display:inline-flex; align-items:center; justify-content:center; gap:.5rem;
+  padding: .85rem 1.2rem; border-radius: 12px; border: 0; cursor: pointer;
+  font-weight: 600; letter-spacing:.2px; min-height: 44px;
+}
+.btn-primary { background: var(--accent-strong); color: #fff; }
+.btn-primary:hover { background: var(--accent-pop); }
+.btn-outline { background: transparent; border:1px solid var(--accent-strong); color: var(--accent-strong); }
+.btn-outline:hover { background: var(--accent-strong); color:#fff; border-color: var(--accent-strong); }
+
+/* Disabled/Loading button state */
+.btn:disabled,
+.btn[disabled] {
+  opacity: .65;
+  cursor: not-allowed;
+  filter: saturate(.8);
 }
 
-// ---------------------
-// Helpers
-// ---------------------
-function updateProgress(stepKey){
-  // q1 ~15%, q2 ~45%, q3 ~70%, q4 ~95%, result ~100%
-  let pct = 15;
-  if (stepKey.startsWith('q2')) pct = 45;
-  else if (stepKey === 'q3') pct = 70;
-  else if (stepKey === 'q4') pct = 95;
-  else if (stepKey.startsWith('result')) pct = 100;
-  if (progressEl) progressEl.style.width = pct + '%';
+/* Forms */
+form label { display:block; margin:.5rem 0 .25rem; color: var(--text); font-weight:600; min-height: 22px; }
+form input {
+  width:100%; padding:.8rem 1rem; border:1px solid #e9e2df; border-radius:12px;
+  transition: border-color .2s ease, box-shadow .2s ease;
+  font-size: 16px; /* prevent iOS zoom on focus */
+  min-height: 44px;
+}
+form input:hover { border-color: var(--accent); }
+form input:focus,
+form input:focus-visible {
+  border-color: var(--accent-strong);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent-strong) 25%, transparent);
 }
 
-function restartQuiz(){
-  userAnswers = [];
-  currentStep = 'q1';
-  provisionalType = null;
-  hasAcne = false;
-  hasScars = false;
-  renderQuestion('q1');
+/* Links in recommendation lists */
+ul a { text-decoration: none; border-bottom: 1px solid #e9e2df; }
+ul a:hover { border-bottom-color: var(--accent-strong); }
+
+/* Layout helpers */
+.links-row { display:flex; gap:.75rem; flex-wrap:wrap; }
+
+/* Modal */
+.modal {
+  position: fixed; inset: 0; display:none; align-items:center; justify-content:center;
+  background: rgba(0,0,0,.4); padding:1rem; z-index: 50;
+}
+.modal__card {
+  background:#fff; border-radius:16px; padding: 1.25rem 1.25rem;
+  max-width: 520px; width:100%; text-align:center; box-shadow: var(--shadow);
+}
+.modal.show { display: flex; }
+
+/* Parallax transition strip */
+.parallax-strip {
+  height: 240px;
+  background: linear-gradient(180deg, var(--bg-2), var(--brand-200));
+  background-attachment: fixed;
 }
 
-// Build final result key from state
-function computeFinalKey(){
-  // Choose base
-  let baseKey;
-  if (hasAcne) {
-    if (provisionalType === 'dry')      baseKey = 'result-dry-acne';
-    else if (provisionalType === 'oily') baseKey = 'result-oily-acne';
-    else                                 baseKey = 'result-acne-prone'; // normal + acne
-  } else {
-    if (provisionalType === 'dry')      baseKey = 'result-dry';
-    else if (provisionalType === 'oily') baseKey = 'result-oily';
-    else                                 baseKey = 'result-normal';
+/* Accessibility: focus rings */
+.option-btn:focus-visible,
+.btn:focus-visible,
+form input:focus-visible,
+a:focus-visible {
+  outline: 3px solid var(--accent-strong);
+  outline-offset: 2px;
+}
+
+/* Respect reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  * { animation: none !important; transition: none !important; }
+}
+
+/* Mobile Safari parallax fix */
+@media (max-width: 768px) {
+  .hero, .parallax-strip { background-attachment: scroll; }
+}
+
+/* --- Mobile optimization pack --- */
+@media (max-width: 480px) {
+  .hero__inner { padding: 4rem 1rem 3.25rem; }
+  .hero h1 { font-size: clamp(1.6rem, 5.2vw + .6rem, 2.2rem); }
+  .hero p  { font-size: 1rem; }
+
+  .hero-logo { max-width: 128px; margin-bottom: .75rem; }
+
+  .section { padding: 2rem 0.875rem; }
+
+  .quiz-wrap {
+    padding: 1rem;
+    border-radius: 14px;
+    box-shadow: 0 8px 22px rgba(0,0,0,.07);
   }
 
-  // Apply scarring modifier
-  if (hasScars) return `${baseKey}-scar`;
-  return baseKey;
+  .progress { height: 5px; }
+
+  .question { font-size: 1.05rem; margin-bottom: 1rem; }
+  .options { gap: .55rem; }
+  .option-btn { padding: .8rem .9rem; border-radius: 12px; }
+
+  .links-row { gap: .5rem; }
+
+  form label { margin: .45rem 0 .2rem; }
+  form input { padding: .75rem .9rem; border-radius: 12px; }
 }
 
-// Transition helper (applies state changes and returns next)
-function getNextFrom(stepKey, answerText){
-  const node = quizData[stepKey];
-  if (!node) return 'q1';
-  const opt = node.options.find(o => o.text === answerText);
-  if (!opt) return 'q1';
-
-  if (typeof opt.setProvisional !== 'undefined') provisionalType = opt.setProvisional;
-  if (typeof opt.setAcne !== 'undefined')        hasAcne = !!opt.setAcne;
-  if (typeof opt.setScars !== 'undefined')       hasScars = !!opt.setScars;
-
-  if (opt.next === 'compute-final') {
-    return computeFinalKey();
-  }
-  return opt.next;
+/* Very narrow devices */
+@media (max-width: 360px) {
+  .hero__inner { padding: 3.25rem .75rem 2.75rem; }
+  .hero-logo { max-width: 112px; }
+  .quiz-wrap { padding: .85rem; }
+  .option-btn { padding: .7rem .8rem; }
 }
 
-// Recompute the step by replaying answers (used for Back)
-function stepFromAnswers(answers){
-  provisionalType = null;
-  hasAcne = false;
-  hasScars = false;
-
-  if (!answers || answers.length === 0) return 'q1';
-  let step = 'q1';
-
-  for (const ans of answers) {
-    const next = getNextFrom(step, ans.answer);
-    step = next || 'q1';
-    if (step.startsWith('result')) return step;
-  }
-  return step;
+/* Dynamic viewport height support */
+@supports (height: 100dvh) {
+  .hero { min-height: 55dvh; }
 }
 
-// ---------------------
-// UI
-// ---------------------
-function renderQuestion(stepKey){
-  currentStep = stepKey;
-  updateProgress(stepKey);
+/* 2-col options on wider screens */
+@media (min-width: 640px){
+  .options { grid-template-columns: 1fr 1fr; }
+}
+@media (min-width: 768px) {
+  .hero__inner { padding: 5rem 1.5rem 4rem; }
+  .hero h1 { font-size: clamp(2.25rem, 3vw + 1.25rem, 3.5rem); }
+  .hero p { font-size: clamp(1.125rem, .8vw + 1rem, 1.25rem); }
+}
+@media (min-width: 1024px) {
+  .hero__inner { max-width: 960px; }
+  .quiz-wrap { max-width: 800px; }
+}
+/* Form field spacing and width improvements */
+form input[type="text"],
+form input[type="email"],
+form input[type="tel"] {
+    width: 100%;
+    max-width: 500px; /* Keeps it from stretching too wide on large screens */
+    padding: 10px;
+    margin-bottom: 12px;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    box-sizing: border-box;
+}
 
-  const data = quizData[stepKey];
-  quizEl.innerHTML = `
-    <h2 class="question">${data.question}</h2>
-    <div class="options" id="options"></div>
-    <div class="links-row" style="margin-top:1rem;">
-      ${userAnswers.length > 0 ? `<button class="btn btn-outline" id="back-btn">Back</button>` : ''}
-      ${userAnswers.length > 0 ? `<button class="btn btn-outline" id="restart-btn">Start Over</button>` : ''}
-    </div>
-  `;
+/* Center the form inputs within the container */
+form {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start; /* Or 'center' if you want them centered */
+    padding: 0 15px; /* Adds space from the edge of the container */
+}
 
-  const optionsEl = document.getElementById('options');
-  data.options.forEach(opt => {
-    const b = document.createElement('button');
-    b.className = 'option-btn';
-    b.type = 'button';
-    b.textContent = opt.text;
-    b.addEventListener('click', () => {
-      userAnswers.push({ question: data.question, answer: opt.text });
-      const next = getNextFrom(stepKey, opt.text);
-      if (next.startsWith('result')) {
-        showResult(next);
-      } else {
-        renderQuestion(next);
-      }
-    });
-    optionsEl.appendChild(b);
-  });
+/* Product Recommendations Section */
+.product-recommendations {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr); /* Default: 2 per row */
+    gap: 20px;
+    margin-top: 20px;
+    justify-items: center; /* Center content in each cell */
+}
 
-  const backBtn = document.getElementById('back-btn');
-  if (backBtn) backBtn.addEventListener('click', () => {
-    if (userAnswers.length > 0) {
-      userAnswers.pop();
-      const prev = stepFromAnswers(userAnswers);
-      if (prev.startsWith('result')) showResult(prev); else renderQuestion(prev);
+.product-item {
+    text-align: center;
+    max-width: 120px;
+}
+
+.product-item img {
+    width: 100px;
+    height: auto;
+    border-radius: 6px;
+    border: 1px solid #eee;
+    background: #fff;
+    padding: 5px;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.product-item img:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.08);
+}
+
+.product-item p {
+    font-size: 0.85rem;
+    color: var(--muted);
+    margin-top: 6px;
+}
+
+/* Medium screens (tablets) */
+@media (min-width: 768px) {
+    .product-recommendations {
+        grid-template-columns: repeat(3, 1fr); /* 3 per row on tablets */
     }
-  });
-
-  const restartBtn = document.getElementById('restart-btn');
-  if (restartBtn) restartBtn.addEventListener('click', restartQuiz);
 }
 
-function showResult(resultKey){
-  currentStep = resultKey;
-  updateProgress('result');
-
-  const result = results[resultKey];
-  const campaignSlug = slugify(resultKey.replace(/^result-/, "")); // e.g., "oily_acne_scar"
-
-  const gallery = productGalleryHTML(result.recommendation, campaignSlug);
-
-  // UTM-tagged CTAs (use the specific URLs in each result)
-  const shopURL = withUTM(result.product_url, {
-    campaign: campaignSlug,
-    content: "shop_button"
-  });
-  const bookURL = withUTM(result.service_url, {
-    campaign: campaignSlug,
-    content: "book_button"
-  });
-
-  quizEl.innerHTML = `
-    <h2 class="question">Your Skin Type: ${result.label}</h2>
-    <p>We recommend starting here:</p>
-
-    ${gallery}
-
-    <div class="links-row" style="margin:1rem 0 .5rem;">
-      <a class="btn btn-outline" style="text-decoration:none;" href="${shopURL}" target="_blank" rel="noopener">Shop LSB Products</a>
-      <a class="btn btn-outline" style="text-decoration:none;" href="${bookURL}" target="_blank" rel="noopener">Book ${result.treatment} at LSB</a>
-      <button id="restart-btn-result" type="button" class="btn btn-outline">Retake Quiz</button>
-    </div>
-
-    <hr style="border:none; border-top:1px solid #eee; margin: 1rem 0 1.25rem;" />
-
-    <h3 style="margin:.25rem 0 .5rem;">Want a custom routine from our estheticians?</h3>
-    <p style="margin-top:0">Share your info and we’ll reach out.</p>
-
-    <form id="followup-form" autocomplete="on" novalidate>
-      <label for="name">Name</label>
-      <input id="name" name="name" type="text" placeholder="LSB" required />
-
-      <label for="email">Email</label>
-      <input id="email" name="email" type="email" placeholder="Lydsskinbar@gmail.com" required inputmode="email" />
-
-      <label for="phone">Phone (optional)</label>
-      <input id="phone" name="phone" type="tel" placeholder="(801) 717-9313" inputmode="tel" />
-
-      <div style="display:flex; gap:.75rem; flex-wrap:wrap; margin-top:.5rem;">
-        <button id="submit-btn" type="submit" class="btn btn-primary">Get Custom Routine</button>
-      </div>
-    </form>
-    <p id="confirmation" style="display:none; color: green; margin-top:.75rem;">Thank you! We'll be in touch soon.</p>
-  `;
-
-  document.getElementById('restart-btn-result').addEventListener('click', restartQuiz);
-
-  // Analytics hook
-  try {
-    window.dispatchEvent(new CustomEvent("lsbQuizComplete", {
-      detail: { result_key: resultKey, utm_campaign: campaignSlug, answers: userAnswers.slice(), provisionalType, hasAcne, hasScars }
-    }));
-  } catch (e) {}
-
-  const form = document.getElementById('followup-form');
-  const submitBtn = document.getElementById('submit-btn');
-
-  form.addEventListener('submit', async (e) => {
-    e.preventDefault();
-
-    const name  = document.getElementById('name').value.trim();
-    const email = document.getElementById('email').value.trim();
-    const phone = document.getElementById('phone').value.trim();
-
-    if (!name || !email) {
-      alert("Please enter your name and a valid email.");
-      return;
+/* Large screens (desktops) */
+@media (min-width: 1024px) {
+    .product-recommendations {
+        grid-template-columns: repeat(5, 1fr); /* 5 per row on desktops */
     }
-
-    submitBtn.disabled = true;
-    const originalText = submitBtn.textContent;
-    submitBtn.textContent = "Submitting…";
-
-    const payload = {
-      answers: userAnswers,
-      result: result.label,
-      result_key: resultKey,
-      utm_campaign: campaignSlug,
-      provisionalType,
-      hasAcne,
-      hasScars,
-      name, email, phone,
-      token: WEBHOOK_TOKEN
-    };
-    const fd = new FormData();
-    fd.append('payload', JSON.stringify(payload));
-
-    try {
-      const res = await fetch('https://script.google.com/macros/s/AKfycbx99ra8wZyF-LNEeXiBOxjyP3ilmFuHiBhQUcWsNL1ueFLfs2Lkrd6feIuXo09Fmco1lQ/exec', {
-        method: 'POST',
-        body: fd
-      });
-
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-
-      form.style.display = 'none';
-      const c = document.getElementById('confirmation');
-      c.innerHTML = `Thank you! We'll be in touch soon. <br><br>
-        <button id="retake" class="btn btn-outline">Retake Quiz</button>`;
-      c.style.display = 'block';
-
-      document.getElementById('retake').addEventListener('click', restartQuiz);
-
-      if (modal) {
-        modal.classList.add('show');
-        setTimeout(() => modal.classList.remove('show'), 1500);
-      }
-
-    } catch (err) {
-      console.error('Sheets error', err);
-      alert("Sorry, we couldn’t submit right now. Please try again in a moment.");
-      submitBtn.disabled = false;
-      submitBtn.textContent = originalText;
-    }
-  });
 }
 
-// ---------------------
-// INIT
-// ---------------------
-renderQuestion('q1');

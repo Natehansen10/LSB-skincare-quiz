@@ -1,7 +1,3 @@
-Here is my current script.js
-
-update it to format that new layout described above:
-
 // =====================
 // QUIZ LOGIC + SHEETS
 // =====================

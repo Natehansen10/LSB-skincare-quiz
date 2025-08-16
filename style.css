@@ -85,8 +85,8 @@ h1, h2, h3 { color: var(--text); letter-spacing: .2px; }
 .question { margin: .25rem 0 1.25rem; font-size: clamp(1.1rem, .9vw + 1rem, 1.35rem); color: var(--text); }
 .options { display: grid; gap: .65rem; margin-bottom: 1rem; }
 .option-btn {
-  text-align: left; padding: 0.9rem 1rem; border: 1px solid #e9e2df;
-  background: #fff; border-radius: 12px; cursor: pointer;
+  text-align: left; padding: 0.9rem 1rem; border: 1px solid #F44831;
+  background: #fff0f0; border-radius: 12px; cursor: pointer;
   transition: transform .06s ease, box-shadow .2s ease, border-color .2s ease;
   min-height: 44px; /* comfortable tap target */
 }

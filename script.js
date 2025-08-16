@@ -8,15 +8,24 @@ const modal = document.getElementById('notify-modal');
 const WEBHOOK_TOKEN = "LSB_SUPER_SECRET_2025"; // must match Apps Script
 
 // ---------------------
-// Branching data (with sensitivity overlay via Q3)
+// State (for dynamic mapping to 7 outcomes)
+// ---------------------
+let userAnswers = [];
+let currentStep = 'q1';
+let provisionalType = null; // 'dry' | 'oily' | 'normal'
+let hasAcne = false;
+let hasScars = false;
+
+// ---------------------
+// Branching data (7-outcome flow)
 // ---------------------
 const quizData = {
-  // Q1 — Oil return time
+  // Q1 — Oil return time (entry)
   q1: {
     question: "How long after cleansing in the morning do you begin to feel oily?",
     options: [
-      { text: "Never / After 12+ hours", next: "q2a" },   // dryness path
-      { text: "6–9 hours after", next: "q2b" },           // oil distribution path
+      { text: "Never / After 12+ hours", next: "q2a" }, // dryness path
+      { text: "6–9 hours after", next: "q2b" },         // oil distribution path
       { text: "Immediately to 5 hours after", next: "q2b" },
     ],
   },
@@ -25,9 +34,9 @@ const quizData = {
   q2a: {
     question: "How often does your skin feel tight, dry, or flaky?",
     options: [
-      { text: "Often", next: "q3-dry" },                  // provisional Dry
-      { text: "Sometimes", next: "q3-combo" },            // provisional Combo
-      { text: "Never", next: "q3-combo" },                // collapse “normal/balanced” into Combination
+      { text: "Often", next: "q3", setProvisional: "dry" },              // Provisional Dry → go acne Q
+      { text: "Sometimes", next: "q3", setProvisional: "normal" },       // Provisional Normal
+      { text: "Never", next: "q3", setProvisional: "normal" },           // Collapses “balanced” into Normal
     ],
   },
 
@@ -35,87 +44,74 @@ const quizData = {
   q2b: {
     question: "Where does your skin feel oily?",
     options: [
-      { text: "All over", next: "q3-oily" },              // provisional Oily
-      { text: "Only some oily areas", next: "q3-combo" }, // provisional Combo
+      { text: "All over", next: "q3", setProvisional: "oily" },          // Provisional Oily
+      { text: "Only some oily areas", next: "q3", setProvisional: "normal" }, // Provisional Normal
     ],
   },
 
-  // Q3 (Sensitivity) — three variants that point to different result buckets
-  "q3-oily": {
-    question: "Does your skin turn red, flushed, or itch after using some products?",
+  // Q3 — Breakout frequency (replaces sensitivity overlay)
+  q3: {
+    question: "How often do you notice new breakouts?",
     options: [
-      { text: "Yes / Yes, often", next: "result-oily-sensitive" },
-      { text: "Sometimes", next: "result-oily-mild" },
-      { text: "Never / Rarely", next: "result-oily" },
+      { text: "Never", next: "compute-no-acne-result", setAcne: false },
+      { text: "Monthly", next: "q4", setAcne: true },
+      { text: "Weekly", next: "q4", setAcne: true },
+      { text: "Daily", next: "q4", setAcne: true },
     ],
   },
-  "q3-combo": {
-    question: "Does your skin turn red, flushed, or itch after using some products?",
+
+  // Q4 — Acne scarring (only if acne path)
+  q4: {
+    question: "Do you have acne scarring?",
     options: [
-      { text: "Yes / Yes, often", next: "result-combo-sensitive" },
-      { text: "Sometimes", next: "result-combo-mild" },
-      { text: "Never / Rarely", next: "result-combo" },
+      { text: "Yes", next: "q5", setScars: true }, // still ask Q5 for profiling, then finalize
+      { text: "No", next: "q5", setScars: false },
     ],
   },
-  "q3-dry": {
-    question: "Does your skin turn red, flushed, or itch after using some products?",
+
+  // Q5 — Large pores/blackheads (profiling only, non-deciding)
+  q5: {
+    question: "Do you have large pores/blackheads?",
     options: [
-      { text: "Yes / Yes, often", next: "result-dry-sensitive" },
-      { text: "Sometimes", next: "result-dry-mild" },
-      { text: "Never / Rarely", next: "result-dry" },
+      { text: "Yes", next: "compute-acne-mapping" },  // finalize after capturing answer
+      { text: "No", next: "compute-acne-mapping" },
     ],
   },
 };
 
 // ---------------------
-// Results (LSB-forward; tweak products anytime)
+// Results (7 fixed outcomes)
 // ---------------------
 const results = {
-  // OILY
   "result-oily": {
     label: "Oily Skin",
-    recommendation: ["Ultra Gentle Cleanser", "Mandelic Serum 5%", "Hydrabalance Gel", "Daily SPF 30 Lotion"],
+    recommendation: ["Ultra Gentle Cleanser", "Mandelic Serum 8%", "Hydrabalance Gel", "Moisture Balance Toner"],
   },
-  "result-oily-mild": {
-    label: "Oily & Mildly Sensitive",
-    recommendation: ["Ultra Gentle Cleanser", "Hydrabalance Gel", "Mandelic Serum 5% (3–4x/week)", "Daily SPF 30 Lotion"],
-  },
-  "result-oily-sensitive": {
-    label: "Oily & Sensitive",
-    recommendation: ["Ultra Gentle Cleanser", "Hydrabalance Gel", "Cran-Peptide Cream", "Daily SPF 30 Lotion"],
-  },
-
-  // COMBINATION
-  "result-combo": {
-    label: "Combination Skin",
-    recommendation: ["Ultra Gentle Cleanser", "Mandelic Serum 5%", "Hydrabalance Gel", "Cran-Peptide Cream"],
-  },
-  "result-combo-mild": {
-    label: "Combination & Mildly Sensitive",
-    recommendation: ["Ultra Gentle Cleanser", "Hydrabalance Gel", "Mandelic Serum 5% (2–3x/week)", "Daily SPF 30 Lotion"],
-  },
-  "result-combo-sensitive": {
-    label: "Combination & Sensitive",
-    recommendation: ["Ultra Gentle Cleanser", "Hydrabalance Gel", "Cran-Peptide Cream", "Daily SPF 30 Lotion"],
-  },
-
-  // DRY
   "result-dry": {
     label: "Dry Skin",
-    recommendation: ["Ultra Gentle Cleanser", "Moisture Balance Toner", "Hydrabalance Gel", "Cran-Peptide Cream", "Daily SPF 30 Lotion"],
+    recommendation: ["Ultra Gentle Cleanser", "Cell Balm", "Cran-Peptide Cream", "Hydrabalance Gel"],
   },
-  "result-dry-mild": {
-    label: "Dry & Mildly Sensitive",
-    recommendation: ["Ultra Gentle Cleanser", "Hydrabalance Gel", "Cran-Peptide Cream", "Daily SPF 30 Lotion"],
+  "result-normal": {
+    label: "Normal Skin",
+    recommendation: ["Ultra Gentle Cleanser", "Mandelic Serum 8%", "Cran-Peptide Cream", "Daily SPF-30"],
   },
-  "result-dry-sensitive": {
-    label: "Dry & Sensitive",
-    recommendation: ["Ultra Gentle Cleanser", "Hydrabalance Gel", "Cran-Peptide Cream", "Daily SPF 30 Lotion"],
+  "result-acne-prone": {
+    label: "Acne-Prone Skin",
+    recommendation: ["Ultra Gentle Cleanser", "Mandelic Serum 8%", "Cran-Peptide Cream", "Acne Med 5%"],
+  },
+  "result-post-acne-scars": {
+    label: "Post-Acne Scars",
+    recommendation: ["Ultra Gentle Cleanser", "Mandelic Serum 8%", "Glow-Tone Serum", "Daily SPF-30"],
+  },
+  "result-dry-acne": {
+    label: "Dry with Acne-Prone",
+    recommendation: ["Ultra Gentle Cleanser", "Mandelic Serum 5%", "Cran-Peptide Cream", "Daily SPF-30"],
+  },
+  "result-oily-acne": {
+    label: "Oily with Acne-Prone",
+    recommendation: ["Ultra Gentle Cleanser", "Mandelic Serum 11%", "Hydrabalance Gel", "Acne Med 5%"],
   },
 };
-
-let userAnswers = [];
-let currentStep = 'q1';
 
 // ---------------------
 // UTM helpers
@@ -140,15 +136,21 @@ function withUTM(baseUrl, { source="skinquiz", medium="website", campaign="", co
 }
 
 // ---------------------
-// Product image map (matches your exact filenames)
-// Note: '%25' is the URL-encoded '%', required for web loading.
+// Product image map (add a few aliases for naming differences)
 // ---------------------
 const productImages = {
   "Ultra Gentle Cleanser": "images/Ultra-Gentle-Cleanser-16oz.png",
   "Hydrabalance Gel": "images/Hydra-Balance-Gel.png",
   "Cran-Peptide Cream": "images/Cran-Peptide-Cream-1.png",
+  "Moisture Balance Toner": "images/Moisture-Balance-Toner.png",
   "Daily SPF 30 Lotion": "images/Daily-SPF30-Plus.png",
-  "Mandelic Serum 5%": "images/Mandelic-Serum-5.png" // file is '...5%.png' on disk; use %25 in the URL
+  "Daily SPF-30": "images/Daily-SPF30-Plus.png",         // alias
+  "Mandelic Serum 5%": "images/Mandelic-Serum-5.png",
+  "Mandelic Serum 8%": "images/Mandelic-Serum-8.png",
+  "Mandelic Serum 11%": "images/Mandelic-Serum-11.png",
+  "Acne Med 5%": "images/Acne-Med-5.png",
+  "Cell Balm": "images/Cell-Balm.png",
+  "Glow-Tone Serum": "images/Glow-Tone-Serum.png",
 };
 
 // Normalize recommendation labels to base product keys
@@ -161,9 +163,11 @@ function productGalleryHTML(recommendations, campaignSlug){
   const items = recommendations.map((rec) => {
     const base = baseProductName(rec);
     const imgPath = productImages[base];
-    if (!imgPath) return "";
+    // If an image isn't mapped yet, still show a text tag (no image)
+    const imgHTML = imgPath
+      ? `<img src="${imgPath}" alt="${base}" style="width:100px; height:auto; border-radius:6px; border:1px solid #eee; background:#fff; padding:5px; display:block; margin:0 auto 6px;" />`
+      : `<div style="width:100px;height:100px;border:1px dashed #ccc;border-radius:6px;display:flex;align-items:center;justify-content:center;margin:0 auto 6px;font-size:.75rem;background:#fafafa;">${base}</div>`;
 
-    // Link to shop with UTMs (content set to product slug)
     const shopLink = withUTM(
       `https://www.lydsskinbar.com/s/shop?search=${encodeURIComponent(base)}`,
       { campaign: campaignSlug, content: slugify(base) }
@@ -172,7 +176,7 @@ function productGalleryHTML(recommendations, campaignSlug){
     return `
       <div class="product-item" style="text-align:center; max-width:120px;">
         <a href="${shopLink}" target="_blank" rel="noopener" style="text-decoration:none;">
-          <img src="${imgPath}" alt="${base}" style="width:100px; height:auto; border-radius:6px; border:1px solid #eee; background:#fff; padding:5px; display:block; margin:0 auto 6px;" />
+          ${imgHTML}
           <span style="display:block; font-size:.9rem; line-height:1.1;">${base}</span>
         </a>
       </div>
@@ -180,7 +184,6 @@ function productGalleryHTML(recommendations, campaignSlug){
   }).join("");
 
   if (!items.trim()) return "";
-  // Responsive grid (2 per row mobile, 3 tablet, 5 desktop handled in CSS)
   return `
     <div class="product-recommendations" style="margin-top:16px;">
       ${items}
@@ -192,33 +195,88 @@ function productGalleryHTML(recommendations, campaignSlug){
 // Helpers
 // ---------------------
 function updateProgress(stepKey){
-  // q1 ~ 15%, q2 ~ 55%, q3 ~ 85%, result ~ 100%
+  // q1 ~15%, q2 ~45%, q3 ~70%, q4 ~85%, q5 ~95%, result ~100%
   let pct = 15;
-  if (stepKey.startsWith('q2')) pct = 55;
-  else if (stepKey.startsWith('q3')) pct = 85;
+  if (stepKey.startsWith('q2')) pct = 45;
+  else if (stepKey === 'q3') pct = 70;
+  else if (stepKey === 'q4') pct = 85;
+  else if (stepKey === 'q5') pct = 95;
   else if (stepKey.startsWith('result')) pct = 100;
   if (progressEl) progressEl.style.width = pct + '%';
-}
-
-// Recompute the step by replaying answers (used for Back)
-function stepFromAnswers(answers){
-  if (!answers || answers.length === 0) return 'q1';
-  let step = 'q1';
-  for (const ans of answers) {
-    const node = quizData[step];
-    if (!node) return 'q1';
-    const chosen = node.options.find(o => o.text === ans.answer);
-    if (!chosen) return 'q1';
-    step = chosen.next;
-    if (step.startsWith('result')) return step;
-  }
-  return step;
 }
 
 function restartQuiz(){
   userAnswers = [];
   currentStep = 'q1';
+  provisionalType = null;
+  hasAcne = false;
+  hasScars = false;
   renderQuestion('q1');
+}
+
+// Compute next step or final result based on state + answer
+function computeNoAcneResult(){
+  if (provisionalType === 'dry')  return 'result-dry';
+  if (provisionalType === 'oily') return 'result-oily';
+  return 'result-normal'; // default
+}
+
+function computeAcneMapping(){
+  // If scars, always Post-Acne Scars regardless of base type
+  if (hasScars) return 'result-post-acne-scars';
+
+  // Else map by base type
+  if (provisionalType === 'dry')  return 'result-dry-acne';
+  if (provisionalType === 'oily') return 'result-oily-acne';
+  return 'result-acne-prone'; // normal + acne
+}
+
+// Centralized transition logic so Back can replay deterministically
+function getNextFrom(stepKey, answerText){
+  const node = quizData[stepKey];
+  if (!node) return 'q1';
+  const opt = node.options.find(o => o.text === answerText);
+  if (!opt) return 'q1';
+
+  // Apply state mutations if present
+  if (typeof opt.setProvisional !== 'undefined') {
+    provisionalType = opt.setProvisional;
+  }
+  if (typeof opt.setAcne !== 'undefined') {
+    hasAcne = !!opt.setAcne;
+  }
+  if (typeof opt.setScars !== 'undefined') {
+    hasScars = !!opt.setScars;
+  }
+
+  // Handle compute pseudo-steps
+  if (opt.next === 'compute-no-acne-result') {
+    return computeNoAcneResult();
+  }
+  if (opt.next === 'compute-acne-mapping') {
+    return computeAcneMapping();
+  }
+
+  return opt.next;
+}
+
+// Recompute the step by replaying answers (used for Back)
+function stepFromAnswers(answers){
+  // reset state then replay
+  provisionalType = null;
+  hasAcne = false;
+  hasScars = false;
+
+  if (!answers || answers.length === 0) return 'q1';
+  let step = 'q1';
+
+  for (const ans of answers) {
+    const next = getNextFrom(step, ans.answer);
+    if (!next) return 'q1';
+    step = next;
+    if (step.startsWith('result')) return step;
+  }
+  return step;
 }
 
 // ---------------------
@@ -246,7 +304,7 @@ function renderQuestion(stepKey){
     b.textContent = opt.text;
     b.addEventListener('click', () => {
       userAnswers.push({ question: data.question, answer: opt.text });
-      const next = opt.next;
+      const next = getNextFrom(stepKey, opt.text);
       if (next.startsWith('result')) {
         showResult(next);
       } else {
@@ -274,7 +332,7 @@ function showResult(resultKey){
   updateProgress('result');
 
   const result = results[resultKey];
-  const campaignSlug = slugify(resultKey.replace(/^result-/, "")); // e.g., "oily_sensitive"
+  const campaignSlug = slugify(resultKey.replace(/^result-/, "")); // e.g., "oily_acne"
 
   // Build image gallery only (no text list)
   const gallery = productGalleryHTML(result.recommendation, campaignSlug);
@@ -328,7 +386,14 @@ function showResult(resultKey){
   // Lightweight analytics hook
   try {
     window.dispatchEvent(new CustomEvent("lsbQuizComplete", {
-      detail: { result_key: resultKey, utm_campaign: campaignSlug, answers: userAnswers.slice() }
+      detail: {
+        result_key: resultKey,
+        utm_campaign: campaignSlug,
+        answers: userAnswers.slice(),
+        provisionalType,
+        hasAcne,
+        hasScars
+      }
     }));
   } catch (e) {}
 
@@ -351,12 +416,15 @@ function showResult(resultKey){
     const originalText = submitBtn.textContent;
     submitBtn.textContent = "Submitting…";
 
-    // Include result + campaign in payload for segmentation
+    // Include result + campaign + state in payload for segmentation
     const payload = {
       answers: userAnswers,
       result: result.label,
       result_key: resultKey,
       utm_campaign: campaignSlug,
+      provisionalType,
+      hasAcne,
+      hasScars,
       name, email, phone,
       token: WEBHOOK_TOKEN
     };
@@ -378,8 +446,7 @@ function showResult(resultKey){
       c.style.display = 'block';
 
       document.getElementById('retake').addEventListener('click', () => {
-        userAnswers = [];
-        renderQuestion('q1');
+        restartQuiz();
       });
 
       if (modal) {

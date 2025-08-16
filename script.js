@@ -8,16 +8,16 @@ const modal = document.getElementById('notify-modal');
 const WEBHOOK_TOKEN = "LSB_SUPER_SECRET_2025"; // must match Apps Script
 
 // ---------------------
-// State (for dynamic mapping to 7 outcomes)
+// State
 // ---------------------
 let userAnswers = [];
 let currentStep = 'q1';
 let provisionalType = null; // 'dry' | 'oily' | 'normal'
-let hasAcne = false;
-let hasScars = false;
+let hasAcne = false;        // user reports breakouts at Monthly/Weekly/Daily
+let hasScars = false;       // last question, applies as a modifier
 
 // ---------------------
-// Branching data (7-outcome flow)
+// Branching data (scarring asked LAST for every path)
 // ---------------------
 const quizData = {
   // Q1 — Oil return time (entry)
@@ -34,9 +34,9 @@ const quizData = {
   q2a: {
     question: "How often does your skin feel tight, dry, or flaky?",
     options: [
-      { text: "Often", next: "q3", setProvisional: "dry" },              // Provisional Dry → go acne Q
-      { text: "Sometimes", next: "q3", setProvisional: "normal" },       // Provisional Normal
-      { text: "Never", next: "q3", setProvisional: "normal" },           // Collapses “balanced” into Normal
+      { text: "Often", next: "q3", setProvisional: "dry" },         // Provisional Dry
+      { text: "Sometimes", next: "q3", setProvisional: "normal" },  // Provisional Normal
+      { text: "Never", next: "q3", setProvisional: "normal" },
     ],
   },
 
@@ -44,72 +44,130 @@ const quizData = {
   q2b: {
     question: "Where does your skin feel oily?",
     options: [
-      { text: "All over", next: "q3", setProvisional: "oily" },          // Provisional Oily
+      { text: "All over", next: "q3", setProvisional: "oily" },     // Provisional Oily
       { text: "Only some oily areas", next: "q3", setProvisional: "normal" }, // Provisional Normal
     ],
   },
 
-  // Q3 — Breakout frequency (replaces sensitivity overlay)
+  // Q3 — Breakout frequency (sets acne yes/no; we will ALWAYS ask scarring next)
   q3: {
     question: "How often do you notice new breakouts?",
     options: [
-      { text: "Never", next: "compute-no-acne-result", setAcne: false },
-      { text: "Monthly", next: "q4", setAcne: true },
-      { text: "Weekly", next: "q4", setAcne: true },
-      { text: "Daily", next: "q4", setAcne: true },
+      { text: "Never",   next: "q4", setAcne: false },
+      { text: "Monthly", next: "q4", setAcne: true  },
+      { text: "Weekly",  next: "q4", setAcne: true  },
+      { text: "Daily",   next: "q4", setAcne: true  },
     ],
   },
 
-  // Q4 — Acne scarring (only if acne path)
+  // Q4 — Scarring (ALWAYS LAST; acts as a modifier)
   q4: {
     question: "Do you have acne scarring?",
     options: [
-      { text: "Yes", next: "q5", setScars: true }, // still ask Q5 for profiling, then finalize
-      { text: "No", next: "q5", setScars: false },
-    ],
-  },
-
-  // Q5 — Large pores/blackheads (profiling only, non-deciding)
-  q5: {
-    question: "Do you have large pores/blackheads?",
-    options: [
-      { text: "Yes", next: "compute-acne-mapping" },  // finalize after capturing answer
-      { text: "No", next: "compute-acne-mapping" },
+      { text: "Yes", next: "compute-final", setScars: true  },
+      { text: "No",  next: "compute-final", setScars: false },
     ],
   },
 };
 
 // ---------------------
-// Results (7 fixed outcomes)
+// Results — 12 outcomes (base ± scarring)
 // ---------------------
 const results = {
+  // Oily
   "result-oily": {
-    label: "Oily Skin",
-    recommendation: ["Ultra Gentle Cleanser", "Mandelic Serum 8%", "Hydrabalance Gel", "Moisture Balance Toner"],
+    label: "Oily skin",
+    recommendation: ["Ultra Gentle Cleanser", "Mandelic Serum 8%", "HydraBalance Gel", "Moisture Balance Toner"],
+    treatment: "Chemical Peel",
+    product_url: "https://www.lydsskinbar.com/s/shop",
+    service_url: "https://www.lydsskinbar.com/s/appointments",
   },
+  "result-oily-scar": {
+    label: "Oily skin with scarring",
+    recommendation: ["Ultra Gentle Cleanser", "Mandelic Serum 8%", "HydraBalance Gel", "Glow-Tone Serum"],
+    treatment: "Microneedling",
+    product_url: "https://www.lydsskinbar.com/s/shop",
+    service_url: "https://www.lydsskinbar.com/s/appointments",
+  },
+
+  // Dry
   "result-dry": {
-    label: "Dry Skin",
+    label: "Dry skin",
     recommendation: ["Ultra Gentle Cleanser", "Cell Balm", "Cran-Peptide Cream", "Hydrabalance Gel"],
+    treatment: "Hydrating Glow Facial",
+    product_url: "https://www.lydsskinbar.com/s/shop",
+    service_url: "https://www.lydsskinbar.com/s/appointments",
   },
+  "result-dry-scar": {
+    label: "Dry skin with scarring",
+    recommendation: ["Ultra Gentle Cleanser", "Cell Balm", "Cran-Peptide Cream", "Glow-Tone Serum"],
+    treatment: "Microneedling",
+    product_url: "https://www.lydsskinbar.com/s/shop",
+    service_url: "https://www.lydsskinbar.com/s/appointments",
+  },
+
+  // Normal
   "result-normal": {
-    label: "Normal Skin",
+    label: "Normal skin",
     recommendation: ["Ultra Gentle Cleanser", "Mandelic Serum 8%", "Cran-Peptide Cream", "Daily SPF-30"],
+    treatment: "Hydrating Glow Facial",
+    product_url: "https://www.lydsskinbar.com/s/shop",
+    service_url: "https://www.lydsskinbar.com/s/appointments",
   },
-  "result-acne-prone": {
-    label: "Acne-Prone Skin",
-    recommendation: ["Ultra Gentle Cleanser", "Mandelic Serum 8%", "Cran-Peptide Cream", "Acne Med 5%"],
-  },
-  "result-post-acne-scars": {
-    label: "Post-Acne Scars",
+  "result-normal-scar": {
+    label: "Normal skin with scarring",
     recommendation: ["Ultra Gentle Cleanser", "Mandelic Serum 8%", "Glow-Tone Serum", "Daily SPF-30"],
+    treatment: "Microneedling",
+    product_url: "https://www.lydsskinbar.com/s/shop",
+    service_url: "https://www.lydsskinbar.com/s/appointments",
   },
+
+  // Acne-prone (normal base)
+  "result-acne-prone": {
+    label: "Acne Prone Skin",
+    recommendation: ["Ultra Gentle Cleanser", "Mandelic Serum 8%", "Cran-Peptide Cream", "Acne Med 5%"],
+    treatment: "Acne Bootcamp or Acne Facial",
+    product_url: "https://www.lydsskinbar.com/s/shop",
+    service_url: "https://www.lydsskinbar.com/s/appointments",
+  },
+  "result-acne-prone-scar": {
+    label: "Acne Prone Skin with scarring",
+    recommendation: ["Ultra Gentle Cleanser", "Mandelic Serum 8%", "Cran-Peptide Cream", "Glow-Tone Serum"],
+    treatment: "Microneedling with Chemical Peel",
+    product_url: "https://www.lydsskinbar.com/s/shop",
+    service_url: "https://www.lydsskinbar.com/s/appointments",
+  },
+
+  // Dry + Acne-prone
   "result-dry-acne": {
-    label: "Dry with Acne-Prone",
+    label: "Dry, Acne Prone skin",
     recommendation: ["Ultra Gentle Cleanser", "Mandelic Serum 5%", "Cran-Peptide Cream", "Daily SPF-30"],
+    treatment: "Chemical Peel",
+    product_url: "https://www.lydsskinbar.com/s/shop",
+    service_url: "https://www.lydsskinbar.com/s/appointments",
   },
+  "result-dry-acne-scar": {
+    label: "Dry, Acne Prone skin with scarring",
+    recommendation: ["Ultra Gentle Cleanser", "Mandelic Serum 8%", "Cran-Peptide Cream", "Daily SPF-30"],
+    treatment: "Microneedling with Chemical Peel",
+    product_url: "https://www.lydsskinbar.com/s/shop",
+    service_url: "https://www.lydsskinbar.com/s/appointments",
+  },
+
+  // Oily + Acne-prone
   "result-oily-acne": {
-    label: "Oily with Acne-Prone",
+    label: "Oily, Acne Prone Skin",
     recommendation: ["Ultra Gentle Cleanser", "Mandelic Serum 11%", "Hydrabalance Gel", "Acne Med 5%"],
+    treatment: "Chemical Peel",
+    product_url: "https://www.lydsskinbar.com/s/shop",
+    service_url: "https://www.lydsskinbar.com/s/appointments",
+  },
+  "result-oily-acne-scar": {
+    label: "Oily, Acne Prone Skin with scarring",
+    recommendation: ["Ultra Gentle Cleanser", "Mandelic Serum 11%", "Hydrabalance Gel", "Glow-Tone Serum"],
+    treatment: "Microneedling with Chemical Peel",
+    product_url: "https://www.lydsskinbar.com/s/shop",
+    service_url: "https://www.lydsskinbar.com/s/appointments",
   },
 };
 
@@ -136,7 +194,7 @@ function withUTM(baseUrl, { source="skinquiz", medium="website", campaign="", co
 }
 
 // ---------------------
-// Product image map (add a few aliases for naming differences)
+// Product image map
 // ---------------------
 const productImages = {
   "Ultra Gentle Cleanser": "images/Ultra-Gentle-Cleanser-16oz.png",
@@ -144,7 +202,7 @@ const productImages = {
   "Cran-Peptide Cream": "images/Cran-Peptide-Cream-1.png",
   "Moisture Balance Toner": "images/Moisture-Balance-Toner.png",
   "Daily SPF 30 Lotion": "images/Daily-SPF30-Plus.png",
-  "Daily SPF-30": "images/Daily-SPF30-Plus.png",         // alias
+  "Daily SPF-30": "images/Daily-SPF30-Plus.png",
   "Mandelic Serum 5%": "images/Mandelic-Serum-5.png",
   "Mandelic Serum 8%": "images/Mandelic-Serum-8.png",
   "Mandelic Serum 11%": "images/Mandelic-Serum-11.png",
@@ -163,13 +221,12 @@ function productGalleryHTML(recommendations, campaignSlug){
   const items = recommendations.map((rec) => {
     const base = baseProductName(rec);
     const imgPath = productImages[base];
-    // If an image isn't mapped yet, still show a text tag (no image)
     const imgHTML = imgPath
       ? `<img src="${imgPath}" alt="${base}" style="width:100px; height:auto; border-radius:6px; border:1px solid #eee; background:#fff; padding:5px; display:block; margin:0 auto 6px;" />`
       : `<div style="width:100px;height:100px;border:1px dashed #ccc;border-radius:6px;display:flex;align-items:center;justify-content:center;margin:0 auto 6px;font-size:.75rem;background:#fafafa;">${base}</div>`;
 
     const shopLink = withUTM(
-      `https://www.lydsskinbar.com/s/shop?search=${encodeURIComponent(base)}`,
+      `${resultsBaseShopURL()}?search=${encodeURIComponent(base)}`,
       { campaign: campaignSlug, content: slugify(base) }
     );
 
@@ -184,23 +241,22 @@ function productGalleryHTML(recommendations, campaignSlug){
   }).join("");
 
   if (!items.trim()) return "";
-  return `
-    <div class="product-recommendations" style="margin-top:16px;">
-      ${items}
-    </div>
-  `;
+  return `<div class="product-recommendations" style="margin-top:16px;">${items}</div>`;
+}
+
+function resultsBaseShopURL(){
+  return "https://www.lydsskinbar.com/s/shop";
 }
 
 // ---------------------
 // Helpers
 // ---------------------
 function updateProgress(stepKey){
-  // q1 ~15%, q2 ~45%, q3 ~70%, q4 ~85%, q5 ~95%, result ~100%
+  // q1 ~15%, q2 ~45%, q3 ~70%, q4 ~95%, result ~100%
   let pct = 15;
   if (stepKey.startsWith('q2')) pct = 45;
   else if (stepKey === 'q3') pct = 70;
-  else if (stepKey === 'q4') pct = 85;
-  else if (stepKey === 'q5') pct = 95;
+  else if (stepKey === 'q4') pct = 95;
   else if (stepKey.startsWith('result')) pct = 100;
   if (progressEl) progressEl.style.width = pct + '%';
 }
@@ -214,55 +270,44 @@ function restartQuiz(){
   renderQuestion('q1');
 }
 
-// Compute next step or final result based on state + answer
-function computeNoAcneResult(){
-  if (provisionalType === 'dry')  return 'result-dry';
-  if (provisionalType === 'oily') return 'result-oily';
-  return 'result-normal'; // default
+// Build final result key from state
+function computeFinalKey(){
+  // Choose base
+  let baseKey;
+  if (hasAcne) {
+    if (provisionalType === 'dry')      baseKey = 'result-dry-acne';
+    else if (provisionalType === 'oily') baseKey = 'result-oily-acne';
+    else                                 baseKey = 'result-acne-prone'; // normal + acne
+  } else {
+    if (provisionalType === 'dry')      baseKey = 'result-dry';
+    else if (provisionalType === 'oily') baseKey = 'result-oily';
+    else                                 baseKey = 'result-normal';
+  }
+
+  // Apply scarring modifier
+  if (hasScars) return `${baseKey}-scar`;
+  return baseKey;
 }
 
-function computeAcneMapping(){
-  // If scars, always Post-Acne Scars regardless of base type
-  if (hasScars) return 'result-post-acne-scars';
-
-  // Else map by base type
-  if (provisionalType === 'dry')  return 'result-dry-acne';
-  if (provisionalType === 'oily') return 'result-oily-acne';
-  return 'result-acne-prone'; // normal + acne
-}
-
-// Centralized transition logic so Back can replay deterministically
+// Transition helper (applies state changes and returns next)
 function getNextFrom(stepKey, answerText){
   const node = quizData[stepKey];
   if (!node) return 'q1';
   const opt = node.options.find(o => o.text === answerText);
   if (!opt) return 'q1';
 
-  // Apply state mutations if present
-  if (typeof opt.setProvisional !== 'undefined') {
-    provisionalType = opt.setProvisional;
-  }
-  if (typeof opt.setAcne !== 'undefined') {
-    hasAcne = !!opt.setAcne;
-  }
-  if (typeof opt.setScars !== 'undefined') {
-    hasScars = !!opt.setScars;
-  }
+  if (typeof opt.setProvisional !== 'undefined') provisionalType = opt.setProvisional;
+  if (typeof opt.setAcne !== 'undefined')        hasAcne = !!opt.setAcne;
+  if (typeof opt.setScars !== 'undefined')       hasScars = !!opt.setScars;
 
-  // Handle compute pseudo-steps
-  if (opt.next === 'compute-no-acne-result') {
-    return computeNoAcneResult();
+  if (opt.next === 'compute-final') {
+    return computeFinalKey();
   }
-  if (opt.next === 'compute-acne-mapping') {
-    return computeAcneMapping();
-  }
-
   return opt.next;
 }
 
 // Recompute the step by replaying answers (used for Back)
 function stepFromAnswers(answers){
-  // reset state then replay
   provisionalType = null;
   hasAcne = false;
   hasScars = false;
@@ -272,8 +317,7 @@ function stepFromAnswers(answers){
 
   for (const ans of answers) {
     const next = getNextFrom(step, ans.answer);
-    if (!next) return 'q1';
-    step = next;
+    step = next || 'q1';
     if (step.startsWith('result')) return step;
   }
   return step;
@@ -332,17 +376,16 @@ function showResult(resultKey){
   updateProgress('result');
 
   const result = results[resultKey];
-  const campaignSlug = slugify(resultKey.replace(/^result-/, "")); // e.g., "oily_acne"
+  const campaignSlug = slugify(resultKey.replace(/^result-/, "")); // e.g., "oily_acne_scar"
 
-  // Build image gallery only (no text list)
   const gallery = productGalleryHTML(result.recommendation, campaignSlug);
 
-  // UTM-tagged primary CTAs
-  const shopURL = withUTM("https://www.lydsskinbar.com/s/shop", {
+  // UTM-tagged CTAs (use the specific URLs in each result)
+  const shopURL = withUTM(result.product_url, {
     campaign: campaignSlug,
     content: "shop_button"
   });
-  const bookURL = withUTM("/book", {
+  const bookURL = withUTM(result.service_url, {
     campaign: campaignSlug,
     content: "book_button"
   });
@@ -353,9 +396,9 @@ function showResult(resultKey){
 
     ${gallery}
 
-    <div class="links-row" style="margin:2rem 0 1.25rem;">
+    <div class="links-row" style="margin:1rem 0 .5rem;">
       <a class="btn btn-outline" style="text-decoration:none;" href="${shopURL}" target="_blank" rel="noopener">Shop LSB Products</a>
-      <a class="btn btn-outline" style="text-decoration:none;" href="${bookURL}" target="_blank" rel="noopener">Book at Lyds Skin Bar</a>
+      <a class="btn btn-outline" style="text-decoration:none;" href="${bookURL}" target="_blank" rel="noopener">Book ${result.treatment} at LSB</a>
       <button id="restart-btn-result" type="button" class="btn btn-outline">Retake Quiz</button>
     </div>
 
@@ -383,17 +426,10 @@ function showResult(resultKey){
 
   document.getElementById('restart-btn-result').addEventListener('click', restartQuiz);
 
-  // Lightweight analytics hook
+  // Analytics hook
   try {
     window.dispatchEvent(new CustomEvent("lsbQuizComplete", {
-      detail: {
-        result_key: resultKey,
-        utm_campaign: campaignSlug,
-        answers: userAnswers.slice(),
-        provisionalType,
-        hasAcne,
-        hasScars
-      }
+      detail: { result_key: resultKey, utm_campaign: campaignSlug, answers: userAnswers.slice(), provisionalType, hasAcne, hasScars }
     }));
   } catch (e) {}
 
@@ -416,7 +452,6 @@ function showResult(resultKey){
     const originalText = submitBtn.textContent;
     submitBtn.textContent = "Submitting…";
 
-    // Include result + campaign + state in payload for segmentation
     const payload = {
       answers: userAnswers,
       result: result.label,
@@ -445,9 +480,7 @@ function showResult(resultKey){
         <button id="retake" class="btn btn-outline">Retake Quiz</button>`;
       c.style.display = 'block';
 
-      document.getElementById('retake').addEventListener('click', () => {
-        restartQuiz();
-      });
+      document.getElementById('retake').addEventListener('click', restartQuiz);
 
       if (modal) {
         modal.classList.add('show');

@@ -62,14 +62,14 @@ h1, h2, h3 { color: var(--text); letter-spacing: .2px; }
   background-attachment: fixed;
 }
 /* FIX: tighten hero bottom padding so hero→section seam is snug */
-.hero__inner { text-align: center; padding: 4rem 1.25rem 2rem; max-width: 920px; }
+.hero__inner { text-align: center; padding: 4rem 1.25rem 1.5rem; max-width: 920px; }
 .badge {
   display:inline-block; padding:.4rem .75rem; border-radius:999px;
   background: #ffffffaa; color: var(--text); font-size:.85rem;
   margin-bottom: .75rem; border:1px solid #ffffff88;
 }
 .hero h1 { font-size: clamp(2rem, 3vw + 1rem, 3.25rem); margin:.25rem 0 1.75rem; }
-.hero p  { font-size: clamp(1rem, .6vw + .9rem, 1.125rem); max-width: 720px; margin: 0 auto; }
+.hero p  { font-size: clamp(1rem, .6vw + .9rem, 1.125rem); max-width: 720px; margin: 0 auto 0.75rem; }
 
 /* Section & Card */
 .section { padding: 3.5rem 1rem; }
@@ -180,9 +180,9 @@ a:focus-visible {
 /* --- Mobile optimization pack --- */
 @media (max-width: 480px) {
   /* FIX: smaller hero bottom padding on phones */
-  .hero__inner { padding: 3rem 1rem 2rem; }
+  .hero__inner { padding: 3rem 1rem 1.5rem; }
   .hero h1 { font-size: clamp(1.6rem, 5.2vw + .6rem, 2.2rem); }
-  .hero p  { font-size: 1rem; }
+  .hero p  { font-size: .5rem; }
 
   .hero-logo { max-width: 128px; margin-bottom: .75rem; }
 
@@ -208,7 +208,7 @@ a:focus-visible {
 
 /* Very narrow devices */
 @media (max-width: 360px) {
-  .hero__inner { padding: 3.25rem .75rem 2rem; }
+  .hero__inner { padding: 3.25rem .75rem 1.5rem; }
   .hero-logo { max-width: 112px; }
   .quiz-wrap { padding: .85rem; }
   .option-btn { padding: .7rem .8rem; }

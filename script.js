@@ -124,14 +124,14 @@ const results = {
 
   // Acne-prone (normal base)
   "result-acne-prone": {
-    label: "Acne Prone Skin",
+    label: "Acne prone Skin",
     recommendation: ["Ultra Gentle Cleanser", "Mandelic Serum 8%", "Cran-Peptide Cream", "Acne Med 5%"],
     treatment: "Acne Bootcamp or Acne Facial",
     product_url: "https://www.lydsskinbar.com/s/shop",
     service_url: "https://www.lydsskinbar.com/s/appointments",
   },
   "result-acne-prone-scar": {
-    label: "Acne Prone Skin with scarring",
+    label: "Acne prone skin with scarring",
     recommendation: ["Ultra Gentle Cleanser", "Mandelic Serum 8%", "Cran-Peptide Cream", "Glow-Tone Serum"],
     treatment: "Microneedling with Chemical Peel",
     product_url: "https://www.lydsskinbar.com/s/shop",
@@ -147,7 +147,7 @@ const results = {
     service_url: "https://www.lydsskinbar.com/s/appointments",
   },
   "result-dry-acne-scar": {
-    label: "Dry, Acne Prone skin with scarring",
+    label: "Dry, acne prone skin with scarring",
     recommendation: ["Ultra Gentle Cleanser", "Mandelic Serum 8%", "Cran-Peptide Cream", "Daily SPF-30"],
     treatment: "Microneedling with Chemical Peel",
     product_url: "https://www.lydsskinbar.com/s/shop",
@@ -156,14 +156,14 @@ const results = {
 
   // Oily + Acne-prone
   "result-oily-acne": {
-    label: "Oily, Acne Prone Skin",
+    label: "Oily, Acne prone Skin",
     recommendation: ["Ultra Gentle Cleanser", "Mandelic Serum 11%", "Hydrabalance Gel", "Acne Med 5%"],
     treatment: "Chemical Peel",
     product_url: "https://www.lydsskinbar.com/s/shop",
     service_url: "https://www.lydsskinbar.com/s/appointments",
   },
   "result-oily-acne-scar": {
-    label: "Oily, Acne Prone Skin with scarring",
+    label: "Oily, Acne prone Skin with scarring",
     recommendation: ["Ultra Gentle Cleanser", "Mandelic Serum 11%", "Hydrabalance Gel", "Glow-Tone Serum"],
     treatment: "Microneedling with Chemical Peel",
     product_url: "https://www.lydsskinbar.com/s/shop",
@@ -394,18 +394,21 @@ function showResult(resultKey){
     content: "book_button"
   });
 
+  // NEW: highlight only the dynamic skin type portion
+  const highlightedLabel = `<span class="result-highlight">${result.label}</span>`;
+
   if (!quizEl) return;
   quizEl.innerHTML = `
-    <h2 class="question">Your Skin Type: ${result.label}</h2>
+    <h2 class="question">Your Skin Type: ${highlightedLabel}</h2>
     <p>We recommend starting here:</p>
 
     ${gallery}
 
-    <div class="links-row" style="margin:1rem 0 .5rem;">
-      <a class="btn btn-outline" style="text-decoration:none;" href="${shopURL}" target="_blank" rel="noopener">Shop LSB Products</a>
-      <a class="btn btn-outline" style="text-decoration:none;" href="${bookURL}" target="_blank" rel="noopener">Book ${result.treatment} at LSB</a>
-      <button id="restart-btn-result" type="button" class="btn btn-outline">Retake Quiz</button>
-    </div>
+<div class="links-row results-actions" style="margin:1rem 0 .5rem;">
+  <a class="btn btn-outline" href="${shopURL}" target="_blank" rel="noopener">Shop LSB Products</a>
+  <a class="btn btn-outline" href="${bookURL}" target="_blank" rel="noopener">Recommended Services: ${result.treatment}</a>
+</div>
+
 
     <hr style="border:none; border-top:1px solid #eee; margin: 1rem 0 1.25rem;" />
 
@@ -424,6 +427,7 @@ function showResult(resultKey){
 
       <div style="display:flex; gap:.75rem; flex-wrap:wrap; margin-top:.5rem;">
         <button id="submit-btn" type="submit" class="btn btn-primary">Get Custom Routine</button>
+        <button id="restart-btn-result" type="button" class="btn btn-outline">Retake Quiz</button>
       </div>
     </form>
     <p id="confirmation" style="display:none; color: green; margin-top:.75rem;">Thank you! We'll be in touch soon.</p>

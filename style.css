@@ -304,3 +304,163 @@ form {
         grid-template-columns: repeat(5, 1fr); /* 5 per row on desktops */
     }
 }
+
+/* Center and style the result heading */
+#quiz h2.question {
+  text-align: left;
+  margin: 0 auto 1.25rem;
+  font-size: 1.6rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+/* Highlight only the dynamic skin type part */
+#quiz h2.question .result-highlight {
+  font-weight: 700;
+  color: var(--accent-pop);
+  padding: 0 .35rem;
+  border-radius: 8px;
+  background: rgba(244, 72, 49, 0.07); /* subtle brand tint */
+  box-shadow: 0 2px 8px rgba(244, 72, 49, 0.15); /* faint glow */
+  font-size: 1.6rem;
+  letter-spacing: .3px;
+}
+/* Result Section Buttons Overhaul */
+#quiz .btn {
+  font-size: 1rem;                 /* same size across all */
+  font-weight: 600;                /* ensure bold */
+  color: var(--accent-pop);        /* text color accent-pop */
+  border-radius: 12px;
+  padding: .85rem 1.2rem;
+  min-height: 44px;
+  letter-spacing: .2px;
+  border: 1px solid var(--accent-pop); /* outline accent-pop */
+  background: transparent;         /* default outline style */
+  transition: all 0.25s ease;
+}
+
+/* Results Section Buttons (merged overrides) */
+#quiz .links-row {
+  display: flex;
+  flex-direction: column;   /* stack vertically */
+  gap: 0.75rem;
+  align-items: stretch;
+}
+
+#quiz .btn {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--accent-pop);
+  border: 1px solid var(--accent-pop);
+  border-radius: 12px;
+  padding: 0.75rem 1rem;
+  background: transparent;
+  transition: all 0.25s ease;
+  box-shadow: 0 2px 4px rgba(0,0,0,.08);
+}
+
+#quiz .btn:hover {
+  background: var(--accent-pop);
+  color: #fff;
+  box-shadow: 0 4px 10px rgba(244, 72, 49, 0.25);
+  transform: translateY(-1px);
+}
+
+#quiz .btn:active {
+  transform: translateY(1px);
+  box-shadow: 0 2px 6px rgba(244, 72, 49, 0.2);
+}
+
+/* Primary action button (Shop) stays filled by default */
+#quiz .btn-primary {
+  background: var(--accent-pop);
+  color: #fff;
+  border: 1px solid var(--accent-pop);
+}
+
+#quiz .btn-primary:hover {
+  background: var(--accent-pop);
+  color: #fff;
+}
+
+/* Ensure Retake Quiz button matches style */
+#quiz #restart-btn-result.btn {
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+#quiz .btn:hover,
+#quiz .btn-outline:hover {
+  text-decoration: none;  /* keep it clean on hover */
+}
+#quiz .btn,
+#quiz .btn-outline {
+  text-decoration: none;  /* removes underline */
+}
+/* Default quiz action row: small, left, no stretching */
+#quiz .links-row {
+  display: flex;
+  flex-direction: row;        /* ensure row for non-result screens */
+  align-items: center;
+  justify-content: flex-start;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+/* Make Back / Start Over small and shrink-to-fit */
+#quiz #back-btn,
+#quiz #restart-btn {
+  font-size: 0.8rem;
+  font-weight: 500;
+  padding: 0.35rem 0.75rem;
+  min-height: auto;
+  border-radius: 6px;
+  border: 1px solid var(--accent-pop);
+  color: var(--accent-pop);
+  background: transparent;
+  box-shadow: none;
+  flex: 0 0 auto;             /* don't stretch */
+  width: auto;                /* shrink to content */
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+
+#quiz #back-btn:hover,
+#quiz #restart-btn:hover {
+  background: var(--accent-pop);
+  color: #fff;
+}
+
+/* Results-only vertical stack (new class) */
+#quiz .results-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.75rem;
+}
+/* Ensure all result CTA buttons (Shop, Book, Retake) are the same height */
+#quiz .results-actions .btn {
+  min-height: 38px;   /* uniform height */
+  font-size: 1rem;
+  font-weight: 600;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+/* Footer buttons row in results */
+#quiz .result-footer-buttons {
+  display: flex;
+  justify-content: space-between; /* 👈 pushes them apart */
+  align-items: center;
+  margin-top: 1rem;
+}
+
+/* Make sure both buttons size nicely */
+#quiz .result-footer-buttons .btn {
+  min-height: 48px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  padding: 0.6rem 1rem;
+}

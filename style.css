@@ -147,7 +147,7 @@ ul a:hover { border-bottom-color: var(--accent-strong); }
 
 /* Parallax transition strip */
 .parallax-strip {
-  height: 240px;
+  height: 32px;
   background: linear-gradient(180deg, var(--bg-2), var(--brand-200));
   background-attachment: fixed;
 }

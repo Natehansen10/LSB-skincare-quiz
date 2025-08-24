@@ -52,7 +52,8 @@ h1, h2, h3 { color: var(--text); letter-spacing: .2px; }
 
 .hero {
   position: relative;
-  min-height: 55vh;
+  /* FIX: remove forced tall hero so it doesn't push the quiz down */
+  min-height: auto !important; /* was 55vh */
   display: grid;
   place-items: center;
   color: var(--text);
@@ -60,7 +61,8 @@ h1, h2, h3 { color: var(--text); letter-spacing: .2px; }
   background: linear-gradient(180deg, var(--brand-200), var(--bg-2));
   background-attachment: fixed;
 }
-.hero__inner { text-align: center; padding: 6rem 1.25rem 5rem; max-width: 920px; }
+/* FIX: tighten hero bottom padding so hero→section seam is snug */
+.hero__inner { text-align: center; padding: 4rem 1.25rem 2rem; max-width: 920px; }
 .badge {
   display:inline-block; padding:.4rem .75rem; border-radius:999px;
   background: #ffffffaa; color: var(--text); font-size:.85rem;
@@ -71,6 +73,9 @@ h1, h2, h3 { color: var(--text); letter-spacing: .2px; }
 
 /* Section & Card */
 .section { padding: 3.5rem 1rem; }
+/* FIX: first section after hero should not add a big top gap */
+.hero + .section { padding-top: 1rem !important; margin-top: 0 !important; }
+
 .quiz-wrap {
   max-width: 720px; margin: 0 auto; background: var(--card);
   border-radius: var(--radius); box-shadow: var(--shadow);
@@ -148,6 +153,7 @@ ul a:hover { border-bottom-color: var(--accent-strong); }
 /* Parallax transition strip */
 .parallax-strip {
   height: 32px;
+  margin: 0; /* ensure no surprise gap */
   background: linear-gradient(180deg, var(--bg-2), var(--brand-200));
   background-attachment: fixed;
 }
@@ -173,7 +179,8 @@ a:focus-visible {
 
 /* --- Mobile optimization pack --- */
 @media (max-width: 480px) {
-  .hero__inner { padding: 4rem 1rem 3.25rem; }
+  /* FIX: smaller hero bottom padding on phones */
+  .hero__inner { padding: 3rem 1rem 2rem; }
   .hero h1 { font-size: clamp(1.6rem, 5.2vw + .6rem, 2.2rem); }
   .hero p  { font-size: 1rem; }
 
@@ -201,7 +208,7 @@ a:focus-visible {
 
 /* Very narrow devices */
 @media (max-width: 360px) {
-  .hero__inner { padding: 3.25rem .75rem 2.75rem; }
+  .hero__inner { padding: 3.25rem .75rem 2rem; }
   .hero-logo { max-width: 112px; }
   .quiz-wrap { padding: .85rem; }
   .option-btn { padding: .7rem .8rem; }
@@ -209,7 +216,8 @@ a:focus-visible {
 
 /* Dynamic viewport height support */
 @supports (height: 100dvh) {
-  .hero { min-height: 55dvh; }
+  /* FIX: keep hero from re-growing due to dvh rule */
+  .hero { min-height: auto; } /* was 55dvh */
 }
 
 /* 2-col options on wider screens */
@@ -217,7 +225,8 @@ a:focus-visible {
   .options { grid-template-columns: 1fr 1fr; }
 }
 @media (min-width: 768px) {
-  .hero__inner { padding: 5rem 1.5rem 4rem; }
+  /* FIX: reduce desktop bottom padding a bit */
+  .hero__inner { padding: 5rem 1.5rem 2.5rem; }
   .hero h1 { font-size: clamp(2.25rem, 3vw + 1.25rem, 3.5rem); }
   .hero p { font-size: clamp(1.125rem, .8vw + 1rem, 1.25rem); }
 }
@@ -225,6 +234,7 @@ a:focus-visible {
   .hero__inner { max-width: 960px; }
   .quiz-wrap { max-width: 800px; }
 }
+
 /* Form field spacing and width improvements */
 form input[type="text"],
 form input[type="email"],
@@ -294,4 +304,3 @@ form {
         grid-template-columns: repeat(5, 1fr); /* 5 per row on desktops */
     }
 }
-

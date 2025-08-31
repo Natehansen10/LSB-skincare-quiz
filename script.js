@@ -1,5 +1,5 @@
 // =====================
-// QUIZ LOGIC + SHEETS (CLEANED)
+// QUIZ LOGIC + SHEETS (CLEANED) + INTRO + EMAIL GATE
 // =====================
 const quizEl = document.getElementById('quiz');
 const progressEl = document.getElementById('progress-bar');
@@ -124,7 +124,7 @@ const results = {
 
   // Acne-prone (normal base)
   "result-acne-prone": {
-    label: "Acne prone Skin",
+    label: "Acne prone skin",
     recommendation: ["Ultra Gentle Cleanser", "Mandelic Serum 8%", "Cran-Peptide Cream", "Acne Med 5%"],
     treatment: "Acne Bootcamp or Acne Facial",
     product_url: "https://www.lydsskinbar.com/s/shop",
@@ -140,7 +140,7 @@ const results = {
 
   // Dry + Acne-prone
   "result-dry-acne": {
-    label: "Dry, Acne Prone skin",
+    label: "Dry, acne prone skin",
     recommendation: ["Ultra Gentle Cleanser", "Mandelic Serum 5%", "Cran-Peptide Cream", "Daily SPF-30"],
     treatment: "Chemical Peel",
     product_url: "https://www.lydsskinbar.com/s/shop",
@@ -156,14 +156,14 @@ const results = {
 
   // Oily + Acne-prone
   "result-oily-acne": {
-    label: "Oily, Acne prone Skin",
+    label: "Oily, acne prone skin",
     recommendation: ["Ultra Gentle Cleanser", "Mandelic Serum 11%", "Hydrabalance Gel", "Acne Med 5%"],
     treatment: "Chemical Peel",
     product_url: "https://www.lydsskinbar.com/s/shop",
     service_url: "https://www.lydsskinbar.com/s/appointments",
   },
   "result-oily-acne-scar": {
-    label: "Oily, Acne prone Skin with scarring",
+    label: "Oily, acne prone skin with scarring",
     recommendation: ["Ultra Gentle Cleanser", "Mandelic Serum 11%", "Hydrabalance Gel", "Glow-Tone Serum"],
     treatment: "Microneedling with Chemical Peel",
     product_url: "https://www.lydsskinbar.com/s/shop",
@@ -254,20 +254,22 @@ function resultsBaseShopURL(){
 function updateProgress(stepKey){
   // q1 ~15%, q2 ~45%, q3 ~70%, q4 ~95%, result ~100%
   let pct = 15;
-  if (stepKey.startsWith('q2')) pct = 45;
+  if (stepKey === 'intro') pct = 0;
+  else if (stepKey.startsWith('q2')) pct = 45;
   else if (stepKey === 'q3') pct = 70;
   else if (stepKey === 'q4') pct = 95;
+  else if (stepKey === 'gate') pct = 98;
   else if (stepKey.startsWith('result')) pct = 100;
   if (progressEl) progressEl.style.width = pct + '%';
 }
 
 function restartQuiz(){
   userAnswers = [];
-  currentStep = 'q1';
+  currentStep = 'intro';
   provisionalType = null;
   hasAcne = false;
   hasScars = false;
-  renderQuestion('q1');
+  renderIntro();
 }
 
 // Build final result key from state
@@ -326,6 +328,109 @@ function stepFromAnswers(answers){
 // ---------------------
 // UI
 // ---------------------
+function renderIntro(){
+  currentStep = 'intro';
+  updateProgress('intro');
+
+  if (!quizEl) {
+    console.error('Missing #quiz element');
+    return;
+  }
+  quizEl.innerHTML = `
+    <div class="intro" style="text-align:center; padding:2rem 1rem;">
+      <h1 style="margin:0 0 .5rem; font-size:2rem; line-height:1.2; color:#F44831;">Clear skin starts here</h1>
+      <p style="margin:.25rem 0 1.25rem; font-size:1rem; color:#555;">A few quick questions to personalize your routine.</p>
+      <button id="begin-quiz-btn" type="button" class="btn btn-primary">Begin Quiz</button>
+    </div>
+  `;
+
+  const begin = document.getElementById('begin-quiz-btn');
+  if (begin) begin.addEventListener('click', () => renderQuestion('q1'));
+}
+
+// EMAIL GATE shown after Q4, before results
+function renderEmailGate(resultKey){
+  currentStep = 'gate';
+  updateProgress('gate');
+
+  if (!quizEl) return;
+  quizEl.innerHTML = `
+    <div class="gate" style="max-width:520px; margin:0 auto;">
+      <h2 class="question" style="margin:0 0 .5rem; color:#F44831; ">Almost There — Get Your Results</h2>
+      <p style="margin:.25rem 0 1rem; color:#555;">Enter your info to see your personalized skin type and routine.</p>
+
+      <form id="gate-form" autocomplete="on" novalidate>
+        <label for="gate-name">Name</label>
+        <input id="gate-name" name="name" type="text" placeholder="Your name" required />
+
+        <label for="gate-email">Email</label>
+        <input id="gate-email" name="email" type="email" placeholder="clearskin@lsb.com" required inputmode="email" />
+
+        <div style="display:flex; gap:.75rem; flex-wrap:wrap; margin-top:.75rem;">
+          <button id="gate-submit" type="submit" class="btn btn-primary">See My Results</button>
+          <button id="gate-retake" type="button" class="btn btn-outline">Retake Quiz</button>
+        </div>
+        <small style="display:block; margin-top:.5rem; color:#777;">We’ll send helpful tips and updates. You can unsubscribe anytime.</small>
+      </form>
+    </div>
+  `;
+
+  // FIXED: Retake button should restart the quiz (go to intro)
+  const retakeBtn = document.getElementById('gate-retake');
+  if (retakeBtn) retakeBtn.addEventListener('click', restartQuiz);
+
+  const form = document.getElementById('gate-form');
+  const submitBtn = document.getElementById('gate-submit');
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const name  = document.getElementById('gate-name').value.trim();
+    const email = document.getElementById('gate-email').value.trim();
+
+    if (!name || !email) {
+      alert('Please enter your name and a valid email.');
+      return;
+    }
+
+    submitBtn.disabled = true;
+    const originalText = submitBtn.textContent;
+    submitBtn.textContent = 'Submitting…';
+
+    // Send minimal lead record for everyone who takes quiz (Sheet: Responses)
+    const payload = {
+      stage: 'gate',                // <-- use this in Apps Script to route to "Responses"
+      answers: userAnswers,         // optional but useful
+      result_key: resultKey,        // computed key before reveal
+      provisionalType,
+      hasAcne,
+      hasScars,
+      name,
+      email,
+      token: WEBHOOK_TOKEN
+    };
+
+    const fd = new FormData();
+    fd.append('payload', JSON.stringify(payload));
+
+    try {
+      const res = await fetch('https://script.google.com/macros/s/AKfycbx99ra8wZyF-LNEeXiBOxjyP3ilmFuHiBhQUcWsNL1ueFLfs2Lkrd6feIuXo09Fmco1lQ/exec', {
+        method: 'POST',
+        body: fd
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+      // Proceed to show results
+      showResult(resultKey);
+
+    } catch (err) {
+      console.error('Sheets error (gate)', err);
+      alert('Sorry, we couldn’t submit right now. Please try again in a moment.');
+      submitBtn.disabled = false;
+      submitBtn.textContent = originalText;
+    }
+  });
+}
+
 function renderQuestion(stepKey){
   currentStep = stepKey;
   updateProgress(stepKey);
@@ -354,7 +459,8 @@ function renderQuestion(stepKey){
       userAnswers.push({ question: data.question, answer: opt.text });
       const next = getNextFrom(stepKey, opt.text);
       if (next.startsWith('result')) {
-        showResult(next);
+        // SHOW EMAIL GATE BEFORE REVEALING RESULTS
+        renderEmailGate(next);
       } else {
         renderQuestion(next);
       }
@@ -367,7 +473,7 @@ function renderQuestion(stepKey){
     if (userAnswers.length > 0) {
       userAnswers.pop();
       const prev = stepFromAnswers(userAnswers);
-      if (prev.startsWith('result')) showResult(prev); else renderQuestion(prev);
+      if (prev.startsWith('result')) renderEmailGate(prev); else renderQuestion(prev);
     }
   });
 
@@ -394,7 +500,6 @@ function showResult(resultKey){
     content: "book_button"
   });
 
-  // NEW: highlight only the dynamic skin type portion
   const highlightedLabel = `<span class="result-highlight">${result.label}</span>`;
 
   if (!quizEl) return;
@@ -412,8 +517,8 @@ function showResult(resultKey){
 
     <hr style="border:none; border-top:1px solid #eee; margin: 1rem 0 1.25rem;" />
 
-    <h3 style="margin:.25rem 0 .5rem;">Want a custom routine from our estheticians?</h3>
-    <p style="margin-top:0">Share your info and we’ll reach out.</p>
+    <h3 style="margin:.25rem 0 .5rem;">Want a Custom Routine?</h3>
+    <p style="margin-top:0">Share your info and our team will reach out to you.</p>
 
     <form id="followup-form" autocomplete="on" novalidate>
       <label for="name">Name</label>
@@ -430,7 +535,7 @@ function showResult(resultKey){
         <button id="restart-btn-result" type="button" class="btn btn-outline">Retake Quiz</button>
       </div>
     </form>
-    <p id="confirmation" style="display:none; color: green; margin-top:.75rem;">Thank you! We'll be in touch soon.</p>
+    <p id="confirmation" style="display:none; color: green; margin-top:.75rem;">Thank you! Check you email for next steps.</p>
   `;
 
   document.getElementById('restart-btn-result').addEventListener('click', restartQuiz);
@@ -462,6 +567,7 @@ function showResult(resultKey){
     submitBtn.textContent = "Submitting…";
 
     const payload = {
+      stage: 'custom',            // <-- use this to route to Sheet1 (custom requests)
       answers: userAnswers,
       result: result.label,
       result_key: resultKey,
@@ -485,7 +591,7 @@ function showResult(resultKey){
 
       form.style.display = 'none';
       const c = document.getElementById('confirmation');
-      c.innerHTML = `Thank you! We'll be in touch soon. <br><br>
+      c.innerHTML = `Thank you! Check your email for next steps. <br><br>
         <button id="retake" class="btn btn-outline">Retake Quiz</button>`;
       c.style.display = 'block';
 
@@ -509,7 +615,7 @@ function showResult(resultKey){
 // INIT
 // ---------------------
 if (quizEl) {
-  renderQuestion('q1');
+  renderIntro();
 } else {
   console.error('Missing #quiz element — ensure this script runs after the HTML.');
 }

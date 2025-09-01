@@ -338,7 +338,8 @@ function renderIntro(){
   }
   quizEl.innerHTML = `
     <div class="intro" style="text-align:center; padding:2rem 1rem;">
-      <h1 style="margin:0 0 .5rem; font-size:2rem; line-height:1.2; color:#F44831;">Clear skin starts here</h1>
+      <h2 style="margin:0 0 .5rem; font-size:clamp(1.6rem, 4vw, 2.2rem); line-height:1.2; color:#F44831; white-space:nowrap;">
+  Clear skin starts here</h2>
       <p style="margin:.25rem 0 1.25rem; font-size:1rem; color:#555;">A few quick questions to personalize your routine.</p>
       <button id="begin-quiz-btn" type="button" class="btn btn-primary">Begin Quiz</button>
     </div>

@@ -464,3 +464,18 @@ form {
   font-weight: 600;
   padding: 0.6rem 1rem;
 }
+.seo-blurb {
+  text-align: center;
+  max-width: 750px;
+  margin: 2rem auto;
+  padding-bottom: 5rem; /* space from bottom of page */
+  color: #444; /* subtle text color */
+  font-size: 1rem;
+  line-height: 1.6;
+}
+
+.seo-blurb h2 {
+  color: #F44831; /* brand-800 */
+  margin-bottom: 1.5rem;
+  font-size: 1.5rem;
+}

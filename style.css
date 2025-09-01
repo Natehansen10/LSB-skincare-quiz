@@ -26,7 +26,7 @@ body {
   margin: 0;
   font-family: helvetica, "Helvetica Neue", Arial, sans-serif;
   color: var(--muted);
-  background: var(--bg-2);
+    background: linear-gradient(180deg, var(--brand-200), var(--brand-300)); /* 👈 full-page gradient */;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 
@@ -58,7 +58,7 @@ h1, h2, h3 { color: var(--text); letter-spacing: .2px; }
   place-items: center;
   color: var(--text);
   overflow: hidden;
-  background: linear-gradient(180deg, var(--brand-200), var(--bg-2));
+  background: transparent;
   background-attachment: fixed;
 }
 /* FIX: tighten hero bottom padding so hero→section seam is snug */
@@ -154,7 +154,7 @@ ul a:hover { border-bottom-color: var(--accent-strong); }
 .parallax-strip {
   height: 32px;
   margin: 0; /* ensure no surprise gap */
-  background: linear-gradient(180deg, var(--bg-2), var(--brand-200));
+  background: transparent;
   background-attachment: fixed;
 }
 

@@ -26,7 +26,7 @@ body {
   margin: 0;
   font-family: helvetica, "Helvetica Neue", Arial, sans-serif;
   color: var(--muted);
-    background: linear-gradient(180deg, var(--brand-200), var(--brand-300)); /* 👈 full-page gradient */;
+    background: linear-gradient(180deg, var(--brand-100), var(--brand-200)); /* 👈 full-page gradient */;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 

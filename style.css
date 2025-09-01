@@ -511,3 +511,45 @@ form {
   color: #444;
   line-height: 1.6;
 }
+
+.footer {
+  text-align: center;
+  background: #fff5f5; /* soft on-brand tint */
+  color: var(--brand-800);
+  padding: 1.25rem 1rem 2.25rem;
+  margin-top: auto;
+}
+
+.footer a {
+  color: var(--brand-800);
+  text-decoration: underline;
+}
+.footer a:hover { text-decoration: none; }
+
+.footer .social {
+  display: flex;
+  gap: 14px;
+  justify-content: center;
+  align-items: center;
+  margin-top: .5rem;
+}
+
+/* Let the link color control the icon color */
+.footer .social a {
+  color: var(--brand-800);     /* brand-800 drives icon color */
+}
+
+.footer .social svg {
+  width: 28px;
+  height: 28px;
+  fill: currentColor;          /* <-- key change */
+  display: block;
+  transition: transform .15s ease, opacity .15s ease;
+}
+
+.footer .social a:hover svg {
+  transform: translateY(-1px);
+  opacity: .85;
+}
+
+
